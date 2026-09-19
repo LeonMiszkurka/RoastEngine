@@ -1,0 +1,8 @@
+{
+  "name": "InputEdit API",
+  "nameId": "inputedit-api",
+  "version": "1.0.0",
+  "type": "api",
+  "engine": "RoastEngine 0.1",
+  "description": "The input API for RoastEngine. Keyboard and mouse always work without it; install and enable this, and mods can add support for other ways to play - controllers, joysticks, anything GLFW can see. The Xbox Controller mod runs on this."
+}

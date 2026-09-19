@@ -1,0 +1,8 @@
+rootProject.name = 'roastengine'
+
+// RoastEngine Creator - the editor / mod authoring tool.
+include 'Creator'
+// The multiplayer wire format, shared by the game and the server.
+include 'Protocol'
+// The dedicated multiplayer server (headless; this is what runs on AWS).
+include 'Server'

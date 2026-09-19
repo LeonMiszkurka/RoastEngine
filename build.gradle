@@ -1,0 +1,445 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'net.coffeebrewia'
+version = '0.1.0-SNAPSHOT'
+
+// ---------------------------------------------------------------------------
+// Versions
+// ---------------------------------------------------------------------------
+ext {
+    lwjglVersion = '3.3.6'
+    jomlVersion  = '1.10.7'
+    gsonVersion  = '2.11.0'
+}
+
+// ---------------------------------------------------------------------------
+// Pick the LWJGL native classifier for the machine running the build.
+// ---------------------------------------------------------------------------
+def lwjglNatives = {
+    def os   = System.getProperty('os.name').toLowerCase()
+    def arch = System.getProperty('os.arch').toLowerCase()
+    def arm  = arch.startsWith('aarch64') || arch.startsWith('arm')
+    if (os.contains('mac'))  return arm ? 'natives-macos-arm64'   : 'natives-macos'
+    if (os.contains('win'))  return arm ? 'natives-windows-arm64' : 'natives-windows'
+    return arm ? 'natives-linux-arm64' : 'natives-linux'
+}()
+def isMac = System.getProperty('os.name').toLowerCase().contains('mac')
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation platform("org.lwjgl:lwjgl-bom:${lwjglVersion}")
+
+    implementation 'org.lwjgl:lwjgl'
+    implementation 'org.lwjgl:lwjgl-glfw'
+    implementation 'org.lwjgl:lwjgl-opengl'
+    implementation 'org.lwjgl:lwjgl-stb'
+    implementation 'org.lwjgl:lwjgl-assimp'   // .obj / .glb / .gltf / .fbx model loading
+    implementation 'org.lwjgl:lwjgl-openal'   // sound effects and music
+    runtimeOnly "org.lwjgl:lwjgl::${lwjglNatives}"
+    runtimeOnly "org.lwjgl:lwjgl-glfw::${lwjglNatives}"
+    runtimeOnly "org.lwjgl:lwjgl-opengl::${lwjglNatives}"
+    runtimeOnly "org.lwjgl:lwjgl-stb::${lwjglNatives}"
+    runtimeOnly "org.lwjgl:lwjgl-assimp::${lwjglNatives}"
+    runtimeOnly "org.lwjgl:lwjgl-openal::${lwjglNatives}"
+
+    implementation "org.joml:joml:${jomlVersion}"
+    implementation "com.google.code.gson:gson:${gsonVersion}"
+
+    // Multiplayer messages, shared with the dedicated server.
+    implementation project(':Protocol')
+}
+
+java {
+    // Compile against the Java 17 API while allowing any newer JDK to run Gradle.
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 17
+}
+
+application {
+    mainClass = 'net.coffeebrewia.roastengine.Main'
+    // GLFW on macOS must run on the process' first thread.
+    def jvmArgs = ['--enable-native-access=ALL-UNNAMED']
+    if (isMac) {
+        jvmArgs += '-XstartOnFirstThread'
+    }
+    applicationDefaultJvmArgs = jvmArgs
+}
+
+tasks.named('run') {
+    // Keep ./mods and ./config next to the project when running from Gradle.
+    workingDir = layout.projectDirectory.asFile
+    // ./gradlew run -Psandbox  boots straight into the sandbox, skipping the menu.
+    if (project.hasProperty('sandbox')) {
+        systemProperty 'roastengine.sandbox', 'true'
+    }
+    // ./gradlew run -PdebugPhysics  logs the player's vertical state once a second.
+    if (project.hasProperty('debugPhysics')) {
+        systemProperty 'roastengine.debugPhysics', 'true'
+    }
+    // ./gradlew run -Psandbox -PstartPitch=60  starts looking down.
+    if (project.hasProperty('startPitch')) {
+        systemProperty 'roastengine.startPitch', project.property('startPitch')
+    }
+    // Player-model tuning: ./gradlew run -PplayerModelOffset=0.35 -PplayerModelYaw=180 -PplayerModelScale=1.1
+    ['playerModelOffset', 'playerModelYaw', 'playerModelScale', 'playerModel', 'hands',
+     'autoWalk', 'playerHeight', 'startYaw', 'autoInteract', 'spawnAt',
+     'headHideRadius', 'sipsToPassOut', 'passOutAt', 'startMenu', 'forceShaders',
+     'modsDir', 'configDir', 'join', 'playerName', 'autoPick', 'server.1.wakeUrl'].each { name ->
+        if (project.hasProperty(name)) {
+            systemProperty "roastengine.${name}", project.property(name)
+        }
+    }
+    // ./gradlew run -PautoScreenshot=4  saves a screenshot after 4s and exits.
+    if (project.hasProperty('autoScreenshot')) {
+        systemProperty 'roastengine.autoScreenshot', project.property('autoScreenshot')
+    }
+}
+
+
+// ---------------------------------------------------------------------------
+// Packaging: a double-clickable app built with the JDK's jpackage.
+//
+//   ./gradlew packageApp   ->  build/package/RoastEngine.app   (macOS)
+//   ./gradlew packageDmg   ->  build/package/RoastEngine-<version>.dmg
+//
+// A plain fat jar is not enough on macOS: GLFW needs -XstartOnFirstThread, and a
+// double-clicked jar cannot pass JVM flags. jpackage bundles a JRE, so players do
+// not need Java installed either.
+// ---------------------------------------------------------------------------
+
+def packageDir = layout.buildDirectory.dir('package')
+def packageInput = layout.buildDirectory.dir('package-input')
+
+// Everything the app needs at runtime, in one folder for jpackage --input.
+// Worlds a new player gets on first run (copied from ./mods), so they have something to play and
+// to pick on a multiplayer server. Mods from mod.io are best: other players download them
+// automatically. Override with -PstarterMods=the-club-map,another-world
+def starterMods = (project.findProperty('starterMods') ?: 'the-club-map').toString().split(',')*.trim().findAll { it }
+
+// The animated player model: the idle clip carries the mesh, the walk clip adds its animation.
+def playerModelFiles = ['player_idle.glb', 'player_walk.glb', 'playermodel.glb']
+
+tasks.register('packageInput', Sync) {
+    dependsOn tasks.named('jar'), project(':Creator').tasks.named('jar')
+    into packageInput
+    from tasks.named('jar')
+    from project(':Creator').tasks.named('jar')
+    from configurations.runtimeClasspath
+    from project(':Creator').configurations.runtimeClasspath
+    // Found at runtime in the app's own folder (GameHome.bundledDirectory()).
+    from(layout.projectDirectory) {
+        include playerModelFiles
+    }
+    starterMods.each { name ->
+        from(layout.projectDirectory.dir("mods/${name}")) {
+            into "starter-mods/${name}"
+        }
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    doFirst {
+        starterMods.each { name ->
+            if (!file("mods/${name}").isDirectory()) {
+                throw new GradleException("Starter mod '${name}' is not in ./mods")
+            }
+        }
+    }
+}
+
+// macOS wants an .icns; build one from the branding PNG with the system tools.
+tasks.register('packageIcon') {
+    onlyIf { isMac && file('branding/roastengine-icon-512x512.png').exists() }
+    def icons = layout.buildDirectory.dir('package-icon')
+    def source = layout.projectDirectory.file('branding/roastengine-icon-512x512.png').asFile
+    outputs.file(icons.map { it.file('RoastEngine.icns') })
+    doLast {
+        def iconset = icons.get().dir('RoastEngine.iconset').asFile
+        iconset.deleteDir()
+        iconset.mkdirs()
+        // sips/iconutil are macOS system tools; run them directly (Gradle 9 removed task-time exec).
+        def run = { cmd ->
+            def process = new ProcessBuilder(cmd).redirectErrorStream(true).start()
+            def output = process.inputStream.text
+            if (process.waitFor() != 0) {
+                throw new GradleException("${cmd.first()} failed: ${output}")
+            }
+        }
+        [16, 32, 64, 128, 256, 512].each { size ->
+            run(['sips', '-z', size.toString(), size.toString(), source.path,
+                 '--out', "${iconset}/icon_${size}x${size}.png".toString()])
+        }
+        run(['iconutil', '-c', 'icns', iconset.path,
+             '-o', icons.get().file('RoastEngine.icns').asFile.path])
+    }
+}
+
+// Second launcher inside the same app, so the Creator ships with the game.
+tasks.register('creatorLauncherProperties') {
+    def propsFile = layout.buildDirectory.file('package-input-creator.properties')
+    outputs.file(propsFile)
+    doLast {
+        def jvmOpts = isMac ? '-XstartOnFirstThread --enable-native-access=ALL-UNNAMED'
+                            : '--enable-native-access=ALL-UNNAMED'
+        propsFile.get().asFile.text = """\
+main-jar=${project(':Creator').tasks.named('jar').get().archiveFileName.get()}
+main-class=net.coffeebrewia.roastengine.creator.CreatorMain
+java-options=${jvmOpts}
+description=RoastEngine Creator
+"""
+    }
+}
+
+tasks.register('packageApp', Exec) {
+    group = 'distribution'
+    description = 'Builds a double-clickable RoastEngine app (jpackage).'
+    dependsOn 'packageInput', 'packageIcon', 'creatorLauncherProperties'
+
+    doFirst {
+        def out = packageDir.get().asFile
+        // jpackage refuses to overwrite an existing app image.
+        new File(out, 'RoastEngine.app').deleteDir()
+        new File(out, 'RoastEngine').deleteDir()
+        out.mkdirs()
+
+        def javaHome = System.getProperty('java.home')
+        def args = [
+                "${javaHome}/bin/jpackage",
+                '--type', 'app-image',
+                '--name', 'RoastEngine',
+                // macOS rejects a leading zero in a bundle version, so this is tracked separately
+                // from the project version: ./gradlew packageApp -PappVersion=1.2.0
+                '--app-version', (project.findProperty('appVersion') ?: '1.0.0').toString(),
+                '--vendor', 'CoffeBrewIA',
+                '--description', 'RoastEngine - lightweight 3D engine and modding platform',
+                '--input', packageInput.get().asFile.path,
+                '--main-jar', tasks.named('jar').get().archiveFileName.get(),
+                '--main-class', 'net.coffeebrewia.roastengine.Main',
+                '--dest', out.path,
+                '--add-launcher', "RoastEngine Creator=${tasks.named('creatorLauncherProperties').get().outputs.files.singleFile.path}",
+        ]
+        if (isMac) {
+            args += ['--java-options', '-XstartOnFirstThread',
+                     '--java-options', '--enable-native-access=ALL-UNNAMED']
+            def icns = tasks.named('packageIcon').get().outputs.files.singleFile
+            if (icns.exists()) {
+                args += ['--icon', icns.path]
+            }
+        } else {
+            args += ['--java-options', '--enable-native-access=ALL-UNNAMED']
+        }
+        commandLine args
+    }
+
+    doLast {
+        println "Packaged: ${packageDir.get().asFile}"
+    }
+}
+
+tasks.register('packageDmg', Exec) {
+    group = 'distribution'
+    description = 'Builds a distributable .dmg containing RoastEngine.app (macOS).'
+    dependsOn 'packageApp'
+    onlyIf { isMac }
+    doFirst {
+        def out = packageDir.get().asFile
+        def appImage = new File(out, 'RoastEngine.app')
+        commandLine "${System.getProperty('java.home')}/bin/jpackage",
+                '--type', 'dmg',
+                '--name', 'RoastEngine',
+                '--app-version', (project.findProperty('appVersion') ?: '1.0.0').toString(),
+                '--vendor', 'CoffeBrewIA',
+                '--app-image', appImage.path,
+                '--dest', out.path
+    }
+}
+
+
+// ---------------------------------------------------------------------------
+// Release builds for itch.io (and anywhere else that takes a zip).
+//
+//   ./gradlew packageRelease -PreleaseVersion=0.1.0
+//
+// Writes into build/release/:
+//   RoastEngine-<version>-macos-<arch>.zip    the app (this Mac's architecture), ad-hoc signed
+//   RoastEngine-<version>-linux-x64.zip       Linux and Intel/AMD Chromebooks
+//   RoastEngine-<version>-linux-arm64.zip     ARM Linux and ARM Chromebooks
+//
+// jpackage only builds for the system it runs on, so the Linux builds are assembled by hand: the
+// same jars with Linux natives swapped in, a Java runtime downloaded from Adoptium, and small
+// launcher scripts. Each zip carries an .itch.toml so the itch.io app offers "Play" and "Creator".
+// ---------------------------------------------------------------------------
+
+def releaseVersion = (project.findProperty('releaseVersion') ?: '0.1.0').toString()
+def releaseDir = layout.buildDirectory.dir('release')
+// The Java runtime shipped in the Linux builds (an LTS release).
+def linuxJavaVersion = (project.findProperty('linuxJava') ?: '25').toString()
+
+/** Runs a command, failing the build with its output if it fails. */
+def runCommand = { List cmd, File dir = null ->
+    def builder = new ProcessBuilder(cmd.collect { it.toString() }).redirectErrorStream(true)
+    if (dir != null) {
+        builder.directory(dir)
+    }
+    def process = builder.start()
+    def output = process.inputStream.text
+    if (process.waitFor() != 0) {
+        throw new GradleException("${cmd.first()} failed:\n${output}")
+    }
+    output
+}
+
+// --- macOS -------------------------------------------------------------------
+
+tasks.register('packageMacRelease') {
+    group = 'distribution'
+    description = 'Zips RoastEngine.app for itch.io (ad-hoc signed; no Apple developer account needed).'
+    dependsOn 'packageApp'
+    onlyIf { isMac }
+    def arch = System.getProperty('os.arch').toLowerCase().contains('aarch64') ? 'arm64' : 'x64'
+    doLast {
+        def app = packageDir.get().file('RoastEngine.app').asFile
+        // Apple Silicon refuses to run unsigned code; an ad-hoc signature is free and enough.
+        // Players still confirm it once in System Settings, as the itch page explains.
+        runCommand(['codesign', '--force', '--deep', '--sign', '-', app.path])
+        def stage = new File(temporaryDir, 'stage')
+        stage.deleteDir()
+        stage.mkdirs()
+        runCommand(['ditto', app.path, new File(stage, 'RoastEngine.app').path])
+        new File(stage, '.itch.toml').text = """\
+[[actions]]
+name = "play"
+path = "RoastEngine.app"
+
+[[actions]]
+name = "RoastEngine Creator"
+path = "RoastEngine.app/Contents/MacOS/RoastEngine Creator"
+"""
+        def out = releaseDir.get().asFile
+        out.mkdirs()
+        def zip = new File(out, "RoastEngine-${releaseVersion}-macos-${arch}.zip")
+        zip.delete()
+        // ditto keeps the app's symlinks, permissions and signature intact, which zip may not.
+        runCommand(['ditto', '-c', '-k', '--norsrc', stage.path, zip.path])
+        println "macOS release: ${zip}"
+    }
+}
+
+// --- Linux / ChromeOS --------------------------------------------------------
+
+def linuxArches = ['x64': [natives: 'natives-linux', adoptium: 'x64'],
+                   'arm64': [natives: 'natives-linux-arm64', adoptium: 'aarch64']]
+
+linuxArches.each { arch, info ->
+    def natives = configurations.create("linuxNatives_${arch}")
+    dependencies {
+        add(natives.name, platform("org.lwjgl:lwjgl-bom:${lwjglVersion}"))
+        ['lwjgl', 'lwjgl-glfw', 'lwjgl-opengl', 'lwjgl-stb', 'lwjgl-assimp', 'lwjgl-openal', 'lwjgl-tinyfd'].each {
+            add(natives.name, "org.lwjgl:${it}::${info.natives}")
+        }
+    }
+
+    def jreDir = layout.buildDirectory.dir("jre-cache/linux-${arch}-${linuxJavaVersion}")
+    def downloadJre = tasks.register("downloadLinuxJre_${arch}") {
+        description = "Downloads the Linux ${arch} Java runtime bundled with the game."
+        outputs.dir(jreDir)
+        doLast {
+            def target = jreDir.get().asFile
+            if (new File(target, 'bin/java').exists()) {
+                return
+            }
+            target.deleteDir()
+            target.mkdirs()
+            def url = "https://api.adoptium.net/v3/binary/latest/${linuxJavaVersion}/ga/linux/${info.adoptium}/jre/hotspot/normal/eclipse"
+            def archive = new File(temporaryDir, 'jre.tar.gz')
+            println "Downloading Java ${linuxJavaVersion} runtime for Linux ${arch}..."
+            new URL(url).withInputStream { input -> archive.withOutputStream { it << input } }
+            def unpacked = new File(temporaryDir, 'unpacked')
+            unpacked.deleteDir()
+            unpacked.mkdirs()
+            runCommand(['tar', '-xzf', archive.path, '-C', unpacked.path])
+            // The archive holds one folder, e.g. jdk-25.0.1+8-jre; its contents become the runtime.
+            def root = unpacked.listFiles().find { it.isDirectory() }
+            runCommand(['sh', '-c', "cp -R '${root.path}/.' '${target.path}/'"])
+            archive.delete()
+        }
+    }
+
+    tasks.register("packageLinuxRelease_${arch}") {
+        group = 'distribution'
+        description = "Builds the Linux ${arch} release zip (also for ChromeOS)."
+        dependsOn 'packageInput', downloadJre
+        doLast {
+            def stage = new File(temporaryDir, 'RoastEngine')
+            stage.parentFile.deleteDir()
+            stage.mkdirs()
+            copy {
+                from packageInput
+                into new File(stage, 'app')
+                // Swap this Mac's native libraries for the Linux ones.
+                exclude '**/*natives-macos*', '**/*natives-windows*', '**/*natives-linux*'
+            }
+            copy {
+                from natives
+                into new File(stage, 'app')
+                include '*natives*'
+            }
+            copy {
+                from jreDir
+                into new File(stage, 'runtime')
+            }
+            def bin = new File(stage, 'bin')
+            bin.mkdirs()
+            def launcher = { String mainClass -> """\
+#!/bin/sh
+# Starts RoastEngine with the Java runtime shipped next to it.
+HERE="\$(cd "\$(dirname "\$0")/.." && pwd)"
+exec "\$HERE/runtime/bin/java" --enable-native-access=ALL-UNNAMED \\
+    -Droastengine.launcher="\$HERE/bin/RoastEngine" \\
+    -cp "\$HERE/app/*" ${mainClass} "\$@"
+""" }
+            new File(bin, 'RoastEngine').text = launcher('net.coffeebrewia.roastengine.Main')
+            new File(bin, 'RoastEngine Creator').text = launcher('net.coffeebrewia.roastengine.creator.CreatorMain')
+            new File(stage, 'RoastEngine.sh').text = '#!/bin/sh\nexec "$(dirname "$0")/bin/RoastEngine" "$@"\n'
+            // At the top of the zip, next to the RoastEngine folder, where the itch.io app looks.
+            new File(stage.parentFile, '.itch.toml').text = """\
+[[actions]]
+name = "play"
+path = "RoastEngine/bin/RoastEngine"
+
+[[actions]]
+name = "RoastEngine Creator"
+path = "RoastEngine/bin/RoastEngine Creator"
+"""
+            new File(stage, 'README.txt').text = file('release/README-linux.txt').text
+            [new File(bin, 'RoastEngine'), new File(bin, 'RoastEngine Creator'), new File(stage, 'RoastEngine.sh')]
+                    .each { it.setExecutable(true, false) }
+            runCommand(['chmod', '-R', 'a+rX', stage.path])
+            runCommand(['chmod', 'a+x', new File(stage, 'runtime/bin').path])
+            runCommand(['sh', '-c', "chmod a+x '${stage.path}/runtime/bin/'* '${stage.path}/runtime/lib/jspawnhelper' 2>/dev/null || true"])
+
+            def out = releaseDir.get().asFile
+            out.mkdirs()
+            def zip = new File(out, "RoastEngine-${releaseVersion}-linux-${arch}.zip")
+            zip.delete()
+            // zip keeps the executable bits, so the launchers run straight after unzipping.
+            runCommand(['zip', '-qr', zip.path, 'RoastEngine', '.itch.toml'], stage.parentFile)
+            println "Linux ${arch} release: ${zip}"
+        }
+    }
+}
+
+tasks.register('packageRelease') {
+    group = 'distribution'
+    description = 'Builds every release zip into build/release/.'
+    dependsOn 'packageMacRelease', 'packageLinuxRelease_x64', 'packageLinuxRelease_arm64'
+}

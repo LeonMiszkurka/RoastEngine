@@ -1,0 +1,22 @@
+{
+  "name": "Xbox Controller",
+  "device": "gamepad",
+
+  "deadzone": 0.18,
+  "lookSpeed": 950,
+  "lookCurve": 2.2,
+
+  "axes": {
+    "moveX": {"axis": "LEFT_X"},
+    "moveY": {"axis": "LEFT_Y", "invert": true},
+    "lookX": {"axis": "RIGHT_X"},
+    "lookY": {"axis": "RIGHT_Y"}
+  },
+
+  "buttons": {
+    "jump": "A",
+    "sprint": ["LEFT_THUMB", "LEFT_BUMPER"],
+    "interact": ["X", "RIGHT_BUMPER"],
+    "pause": ["START", "BACK"]
+  }
+}

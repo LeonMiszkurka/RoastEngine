@@ -1,0 +1,9 @@
+{
+  "name": "Xbox Controller",
+  "nameId": "xbox-controller",
+  "version": "1.0.0",
+  "type": "mod",
+  "engine": "RoastEngine 0.1",
+  "requires": "inputedit-api",
+  "description": "Play with an Xbox controller: left stick walks, right stick looks, A jumps, X interacts, left stick click sprints, Menu pauses. Runs on the InputEdit API - install and enable that first, then enable this."
+}

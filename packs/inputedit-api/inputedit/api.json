@@ -1,0 +1,58 @@
+{
+  "name": "InputEdit API",
+  "version": "1.0.0",
+
+  "defaults": {
+    "deadzone": 0.15,
+    "lookSpeed": 900,
+    "lookCurve": 2.0
+  },
+
+  "axes": {
+    "LEFT_X": 0,
+    "LEFT_Y": 1,
+    "RIGHT_X": 2,
+    "RIGHT_Y": 3,
+    "LEFT_TRIGGER": 4,
+    "LT": 4,
+    "L2": 4,
+    "RIGHT_TRIGGER": 5,
+    "RT": 5,
+    "R2": 5
+  },
+
+  "buttons": {
+    "A": 0,
+    "CROSS": 0,
+    "B": 1,
+    "CIRCLE": 1,
+    "X": 2,
+    "SQUARE": 2,
+    "Y": 3,
+    "TRIANGLE": 3,
+    "LEFT_BUMPER": 4,
+    "LB": 4,
+    "L1": 4,
+    "RIGHT_BUMPER": 5,
+    "RB": 5,
+    "R1": 5,
+    "BACK": 6,
+    "VIEW": 6,
+    "SELECT": 6,
+    "SHARE": 6,
+    "START": 7,
+    "MENU": 7,
+    "OPTIONS": 7,
+    "GUIDE": 8,
+    "HOME": 8,
+    "PS": 8,
+    "LEFT_THUMB": 9,
+    "L3": 9,
+    "RIGHT_THUMB": 10,
+    "R3": 10,
+    "DPAD_UP": 11,
+    "DPAD_RIGHT": 12,
+    "DPAD_DOWN": 13,
+    "DPAD_LEFT": 14
+  }
+}

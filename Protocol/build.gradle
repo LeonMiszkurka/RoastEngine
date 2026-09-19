@@ -1,0 +1,27 @@
+// The wire format shared by the game client and the dedicated server. Plain Java with no
+// dependencies, so the server never pulls in LWJGL or anything graphical.
+plugins {
+    id 'java-library'
+}
+
+group = 'net.coffeebrewia'
+version = rootProject.version
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 17
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

@@ -1,0 +1,77 @@
+// The RoastEngine dedicated server. Headless, no LWJGL: it only needs a Java runtime, so it runs
+// on the cheapest cloud machine.
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'net.coffeebrewia'
+version = rootProject.version
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(':Protocol')
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 17
+}
+
+application {
+    mainClass = 'net.coffeebrewia.roastengine.server.RoastServer'
+    applicationName = 'roastengine-server'
+}
+
+// ./gradlew :Server:distZip names the zip without a version, so the deploy steps never change.
+tasks.named('distZip') {
+    archiveVersion = ''
+}
+tasks.named('distTar') {
+    enabled = false
+}
+
+// As with the Creator: a plain `./gradlew run` matches `run` in every project, and would start
+// the server after the game exits. The server's launch task has its own name instead.
+tasks.register('server', JavaExec) {
+    group = 'application'
+    description = 'Runs the RoastEngine dedicated server locally.'
+    mainClass = application.mainClass
+    classpath = sourceSets.main.runtimeClasspath
+    def runDir = layout.projectDirectory.dir('run').asFile
+    workingDir = runDir
+    standardInput = System.in // admin commands: list, say, kick, stop
+    doFirst { runDir.mkdirs() }
+}
+
+tasks.named('run') {
+    enabled = false
+    doFirst {
+        throw new GradleException("Use './gradlew :Server:server' to run the server.")
+    }
+}
+
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+// The deploy scripts travel inside the zip, so the server machine has everything in one upload.
+distributions {
+    main {
+        contents {
+            from('deploy') {
+                into 'deploy'
+                filePermissions { unix('rwxr-xr-x') }
+            }
+        }
+    }
+}

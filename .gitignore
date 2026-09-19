@@ -1,0 +1,13 @@
+.gradle/
+build/
+out/
+.idea/
+*.iml
+.vscode/
+
+screenshots/
+
+# Local runtime data (contains credentials / downloaded content)
+config/modio.properties
+mods/.downloads/
+mods/.staging/

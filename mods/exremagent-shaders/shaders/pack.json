@@ -1,0 +1,16 @@
+{
+  "name": "HalfPark",
+  "bloomPasses": 6,
+  "bloomThreshold": 0.85,
+  "uniforms": {
+    "exposure": 1.15,
+    "bloomStrength": 0.9,
+    "aoStrength": 1.4,
+    "aoRadius": 0.55,
+    "saturation": 3.36,
+    "contrast": 3.18,
+    "warmth": 0.7,
+    "vignette": 0.0,
+    "grain": 0.018
+  }
+}

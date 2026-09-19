@@ -1,0 +1,8 @@
+{
+  "name": "RoastEngine Shader API",
+  "nameId": "roastengine-shader-api",
+  "version": "1.0.0",
+  "type": "api",
+  "engine": "RoastEngine 0.1",
+  "description": "The shader API for RoastEngine: HDR bloom, ambient occlusion, filmic tonemapping and colour grading. Install it, enable it, then switch on Settings > Graphics > Enable Shaders."
+}

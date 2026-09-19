@@ -1,0 +1,30 @@
+# systemd service for the RoastEngine server. Installed by setup.sh; starts on boot and restarts
+# if it ever stops. Logs: sudo journalctl -u roastengine-server -f
+[Unit]
+Description=RoastEngine multiplayer server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=roastengine
+WorkingDirectory=/opt/roastengine-server/data
+ExecStart=/opt/roastengine-server/app/bin/roastengine-server
+# The server is small; this keeps it well inside the cheapest machine's memory.
+Environment=JAVA_OPTS=-Xmx256m
+Restart=always
+RestartSec=3
+# Exit code 42 means "nobody has been on for idleShutdownMinutes": don't restart, power off
+# instead, which on EC2 stops the instance and stops the hourly charge. The '+' runs that one
+# step with the rights to power off; the server itself never has them.
+RestartPreventExitStatus=42
+ExecStopPost=+/opt/roastengine-server/app/deploy/after-exit.sh
+
+# It only needs to read its program and write its own data folder.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/roastengine-server/data
+
+[Install]
+WantedBy=multi-user.target

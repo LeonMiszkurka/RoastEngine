@@ -1,0 +1,87 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'net.coffeebrewia'
+version = rootProject.version
+
+def lwjglVersion = rootProject.ext.lwjglVersion
+def lwjglNatives = {
+    def os = System.getProperty('os.name').toLowerCase()
+    def arch = System.getProperty('os.arch').toLowerCase()
+    def arm = arch.startsWith('aarch64') || arch.startsWith('arm')
+    if (os.contains('mac')) return arm ? 'natives-macos-arm64' : 'natives-macos'
+    if (os.contains('win')) return arm ? 'natives-windows-arm64' : 'natives-windows'
+    return arm ? 'natives-linux-arm64' : 'natives-linux'
+}()
+def isMac = System.getProperty('os.name').toLowerCase().contains('mac')
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // The Creator reuses the engine: window, input, renderer, UI, mod packaging.
+    implementation project(':')
+
+    implementation platform("org.lwjgl:lwjgl-bom:${lwjglVersion}")
+    implementation 'org.lwjgl:lwjgl'
+    implementation 'org.lwjgl:lwjgl-glfw'
+    implementation 'org.lwjgl:lwjgl-opengl'
+    implementation 'org.lwjgl:lwjgl-stb'
+    implementation 'org.lwjgl:lwjgl-tinyfd'   // native open/save file dialogs
+    runtimeOnly "org.lwjgl:lwjgl::${lwjglNatives}"
+    runtimeOnly "org.lwjgl:lwjgl-glfw::${lwjglNatives}"
+    runtimeOnly "org.lwjgl:lwjgl-opengl::${lwjglNatives}"
+    runtimeOnly "org.lwjgl:lwjgl-stb::${lwjglNatives}"
+    runtimeOnly "org.lwjgl:lwjgl-tinyfd::${lwjglNatives}"
+
+    implementation "org.joml:joml:${rootProject.ext.jomlVersion}"
+    implementation "com.google.code.gson:gson:${rootProject.ext.gsonVersion}"
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 17
+}
+
+def creatorJvmArgs = ['--enable-native-access=ALL-UNNAMED']
+if (isMac) {
+    creatorJvmArgs += '-XstartOnFirstThread'
+}
+
+application {
+    mainClass = 'net.coffeebrewia.roastengine.creator.CreatorMain'
+    applicationDefaultJvmArgs = creatorJvmArgs
+}
+
+// Gradle matches an unqualified task name in EVERY project, so a plain `./gradlew run` would
+// start the game and then the Creator the moment the game exits. The Creator's launch task
+// therefore has its own name, and the inherited `run` is disabled.
+tasks.register('creator', JavaExec) {
+    group = 'application'
+    description = 'Runs RoastEngine Creator (the editor).'
+    mainClass = 'net.coffeebrewia.roastengine.creator.CreatorMain'
+    classpath = sourceSets.main.runtimeClasspath
+    workingDir = rootProject.layout.projectDirectory.asFile
+    jvmArgs = creatorJvmArgs
+    // Dev aids: -PopenProject=<path> skips the launcher, -PautoScreenshot=<seconds> shoots and exits.
+    ['openProject', 'autoScreenshot', 'startTool'].each { name ->
+        if (project.hasProperty(name)) {
+            systemProperty "roastengine.${name}", project.property(name)
+        }
+    }
+}
+
+tasks.named('run') {
+    enabled = false
+    doFirst {
+        throw new GradleException("Use './gradlew :Creator:creator' to run RoastEngine Creator.")
+    }
+}

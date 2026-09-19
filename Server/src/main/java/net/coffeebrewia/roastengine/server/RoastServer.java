@@ -1,0 +1,439 @@
+package net.coffeebrewia.roastengine.server;
+
+import net.coffeebrewia.roastengine.net.Protocol;
+import net.coffeebrewia.roastengine.net.Protocol.Chat;
+import net.coffeebrewia.roastengine.net.Protocol.ChooseSession;
+import net.coffeebrewia.roastengine.net.Protocol.ModRef;
+import net.coffeebrewia.roastengine.net.Protocol.SessionUpdate;
+import net.coffeebrewia.roastengine.net.Protocol.StatusReply;
+import net.coffeebrewia.roastengine.net.Protocol.Hello;
+import net.coffeebrewia.roastengine.net.Protocol.Move;
+import net.coffeebrewia.roastengine.net.Protocol.PlayerJoined;
+import net.coffeebrewia.roastengine.net.Protocol.PlayerLeft;
+import net.coffeebrewia.roastengine.net.Protocol.Pose;
+import net.coffeebrewia.roastengine.net.Protocol.Snapshot;
+import net.coffeebrewia.roastengine.net.Protocol.Welcome;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketException;
+import java.nio.file.Path;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * The RoastEngine dedicated server.
+ *
+ * <p>It relays: players send where they are, and 20 times a second the server sends everyone
+ * a snapshot of where everybody is, plus chat and join/leave notices. It never loads a world or
+ * runs physics, so it needs no graphics and very little CPU - the smallest cloud machine is
+ * plenty for 16 players.
+ *
+ * <pre>
+ *   ./gradlew :Server:server           run locally (settings in Server/run/server.properties)
+ *   ./gradlew :Server:distZip          Server/build/distributions/roastengine-server.zip
+ * </pre>
+ *
+ * Type {@code help} in the console for the admin commands.
+ *
+ * <p><b>Sessions.</b> The first player in picks the world (and any content mods); everyone after
+ * plays that. Whoever joins while it is being picked waits, and if the picker leaves first the
+ * choice passes to the next player. When the last player leaves, the session ends and the next
+ * person in picks again. Setting {@code world} in server.properties fixes the world instead.
+ *
+ * <p>With {@code idleShutdownMinutes} set, the server exits with {@link #EXIT_IDLE} once nobody
+ * has been on for that long. On the cloud machine the service turns that exit into powering
+ * the machine off, so it only costs money while people play.
+ */
+public final class RoastServer {
+
+    /** Exit code meaning "nobody is playing, the machine can be switched off". */
+    public static final int EXIT_IDLE = 42;
+    private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm:ss");
+
+    private final ServerConfig config;
+    /** Everyone who has been welcomed, by id. Connections still saying hello are not in here. */
+    private final Map<Integer, ClientConnection> players = new ConcurrentHashMap<>();
+    private final AtomicInteger nextId = new AtomicInteger(1);
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "server-tick");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private volatile boolean running = true;
+    private ServerSocket listener;
+    /** When the server last had someone on (or started). Only touched on the tick thread. */
+    private long lastOccupied = System.nanoTime();
+    /** What happens when the idle limit is reached; the tests swap out the real exit. */
+    private final Runnable onIdle;
+
+    // The session. Guarded by this server's lock.
+    private ModRef world;
+    private List<ModRef> sessionMods = List.of();
+    /** Who is picking the world while none is set; null when nobody is. */
+    private ClientConnection chooser;
+
+    RoastServer(ServerConfig config) {
+        this(config, () -> System.exit(EXIT_IDLE));
+    }
+
+    RoastServer(ServerConfig config, Runnable onIdle) {
+        this.config = config;
+        this.onIdle = onIdle;
+        resetSession();
+    }
+
+    /** Back to "nobody has picked", or to the fixed world from server.properties. */
+    private synchronized void resetSession() {
+        world = config.world.isEmpty() ? null : new ModRef(0, config.world, config.world);
+        sessionMods = List.of();
+        chooser = null;
+    }
+
+    public static void main(String[] args) throws IOException {
+        Path settings = Path.of(args.length > 0 ? args[0] : "server.properties");
+        RoastServer server = new RoastServer(ServerConfig.load(settings));
+        Runtime.getRuntime().addShutdownHook(new Thread(server::shutdown, "shutdown"));
+        server.run();
+    }
+
+    private void run() throws IOException {
+        bind();
+        startConsole();
+        acceptLoop();
+    }
+
+    /** Opens the port and starts ticking. Port 0 picks any free port (used by the tests). */
+    void bind() throws IOException {
+        listener = new ServerSocket(config.port);
+        log("'" + config.name + "' listening on port " + port() + " (max " + config.maxPlayers
+                + " players" + (config.world.isEmpty() ? "" : ", world: " + config.world) + ")");
+        if (config.idleShutdownMinutes > 0) {
+            log("Will shut down after " + config.idleShutdownMinutes + " minute(s) with nobody on");
+        }
+        scheduler.scheduleAtFixedRate(this::tick, 0, 1000 / Protocol.TICK_RATE, TimeUnit.MILLISECONDS);
+    }
+
+    int port() {
+        return listener.getLocalPort();
+    }
+
+    void acceptLoop() throws IOException {
+        while (running) {
+            Socket socket;
+            try {
+                socket = listener.accept();
+            } catch (SocketException e) {
+                if (!running) {
+                    break; // closed by shutdown()
+                }
+                throw e;
+            }
+            new ClientConnection(nextId.getAndIncrement(), socket, this).start();
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Called from connection threads
+    // ---------------------------------------------------------------------
+
+    /**
+     * Admits a player, or refuses them with a reason. Synchronized so two people asking for the
+     * same name at the same moment cannot both get it.
+     *
+     * @return true when welcomed
+     */
+    synchronized boolean join(ClientConnection client, Hello hello) {
+        if (hello.version() != Protocol.VERSION) {
+            client.close(hello.version() < Protocol.VERSION
+                    ? "Your game is out of date. Please update RoastEngine to play here."
+                    : "This server is out of date. It runs an older version of RoastEngine.");
+            return false;
+        }
+        if (players.size() >= config.maxPlayers) {
+            client.close("The server is full (" + config.maxPlayers + " players).");
+            return false;
+        }
+        String wanted = Protocol.cleanName(hello.name());
+        if (wanted.length() < 2) {
+            client.close("Pick a name of at least 2 letters or numbers.");
+            return false;
+        }
+        String name = uniqueName(wanted);
+        client.name = name;
+
+        client.send(new Welcome(client.id, name, config.name, config.motd, config.maxPlayers));
+        for (ClientConnection other : players.values()) {
+            client.send(new PlayerJoined(other.id, other.name));
+        }
+        players.put(client.id, client);
+        if (world == null && chooser == null) {
+            chooser = client; // first in: they pick
+        }
+        client.send(sessionFor(client));
+        broadcast(Protocol.encode(new PlayerJoined(client.id, name)), client);
+        broadcast(Protocol.encode(new Chat("", name + " joined the game")), null);
+        log(name + " joined from " + client.address() + " (" + players.size() + " online)");
+        return true;
+    }
+
+    /** The session as this player should see it: ready, their turn to pick, or waiting. */
+    private SessionUpdate sessionFor(ClientConnection client) {
+        if (world != null) {
+            return new SessionUpdate(SessionUpdate.READY, "", world, sessionMods);
+        }
+        if (chooser == client) {
+            return new SessionUpdate(SessionUpdate.CHOOSE, client.name, null, List.of());
+        }
+        return new SessionUpdate(SessionUpdate.WAITING, chooser == null ? "" : chooser.name, null, List.of());
+    }
+
+    private void sendSessionToAll() {
+        for (ClientConnection player : players.values()) {
+            player.send(sessionFor(player));
+        }
+    }
+
+    /** The picker's answer. Anyone else's, or a second answer, just gets the current session back. */
+    synchronized void chooseSession(ClientConnection client, ChooseSession choice) {
+        if (world != null || chooser != client) {
+            client.send(sessionFor(client));
+            return;
+        }
+        ModRef picked = cleanRef(choice.world());
+        if (picked == null) {
+            client.send(new Chat("", "That world could not be used - pick another."));
+            client.send(sessionFor(client));
+            return;
+        }
+        List<ModRef> mods = new ArrayList<>();
+        for (ModRef mod : choice.mods()) {
+            ModRef clean = cleanRef(mod);
+            if (clean != null && mods.size() < Protocol.MAX_SESSION_MODS) {
+                mods.add(clean);
+            }
+        }
+        world = picked;
+        sessionMods = List.copyOf(mods);
+        chooser = null;
+        sendSessionToAll();
+        String withMods = mods.isEmpty() ? "" : " with " + mods.size() + " mod(s)";
+        broadcast(Protocol.encode(new Chat("", client.name + " picked " + picked.name() + withMods)), null);
+        log(client.name + " picked " + picked.name() + withMods);
+    }
+
+    /** Keeps names printable and short; a reference with nothing to find it by is dropped. */
+    private static ModRef cleanRef(ModRef ref) {
+        if (ref == null) {
+            return null;
+        }
+        String key = Protocol.cleanChat(ref.key());
+        String name = Protocol.cleanChat(ref.name());
+        if (key.isEmpty() && ref.modIoId() <= 0) {
+            return null;
+        }
+        return new ModRef(Math.max(0, ref.modIoId()), key, name.isEmpty() ? key : name);
+    }
+
+    /** The world name for the server list, or empty. */
+    synchronized StatusReply status() {
+        return new StatusReply(config.name, config.motd, players.size(), config.maxPlayers,
+                world == null ? "" : world.name());
+    }
+
+    /** The name, or the name with a number after it when someone is already using it. */
+    private String uniqueName(String wanted) {
+        String name = wanted;
+        for (int n = 2; nameTaken(name); n++) {
+            String suffix = String.valueOf(n);
+            name = wanted.substring(0, Math.min(wanted.length(), Protocol.MAX_NAME - suffix.length())) + suffix;
+        }
+        return name;
+    }
+
+    private boolean nameTaken(String name) {
+        return players.values().stream().anyMatch(p -> p.name.equalsIgnoreCase(name));
+    }
+
+    synchronized void leave(ClientConnection client, String reason) {
+        if (players.remove(client.id) == null) {
+            return; // never got in
+        }
+        broadcast(Protocol.encode(new PlayerLeft(client.id)), null);
+        broadcast(Protocol.encode(new Chat("", client.name + " left the game")), null);
+        log(client.name + " left" + (reason == null ? "" : " (" + reason + ")")
+                + " (" + players.size() + " online)");
+
+        if (players.isEmpty()) {
+            if (world != null && config.world.isEmpty()) {
+                log("Everyone left - the next player picks the world");
+            }
+            resetSession();
+        } else if (chooser == client) {
+            // The picker left before picking: the longest-waiting player picks instead.
+            chooser = players.values().stream().min(java.util.Comparator.comparingInt(p -> p.id)).orElse(null);
+            sendSessionToAll();
+        }
+    }
+
+    void chat(ClientConnection client, String text) {
+        if (text.equalsIgnoreCase("/list") || text.equalsIgnoreCase("/who")) {
+            client.send(new Chat("", players.size() + " online: " + playerNames()));
+            return;
+        }
+        if (text.startsWith("/")) {
+            client.send(new Chat("", "Commands: /list"));
+            return;
+        }
+        log("<" + client.name + "> " + text);
+        broadcast(Protocol.encode(new Chat(client.name, text)), null);
+    }
+
+    /** Runs a task on the server's scheduler thread after a delay. */
+    void later(Runnable task, long delay, TimeUnit unit) {
+        if (!scheduler.isShutdown()) {
+            scheduler.schedule(task, delay, unit);
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Tick
+    // ---------------------------------------------------------------------
+
+    /** Sends everyone the same snapshot, encoded once. */
+    private void tick() {
+        try {
+            if (players.isEmpty()) {
+                checkIdle();
+                return;
+            }
+            lastOccupied = System.nanoTime();
+            List<Pose> poses = new ArrayList<>(players.size());
+            for (ClientConnection player : players.values()) {
+                Move move = player.pose;
+                if (move != null) {
+                    poses.add(new Pose(player.id, move.x(), move.y(), move.z(),
+                            move.yaw(), move.pitch(), move.moving()));
+                }
+            }
+            broadcast(Protocol.encode(new Snapshot(poses)), null);
+        } catch (RuntimeException e) {
+            // An exception would silently cancel the repeating task, freezing everyone.
+            log("Tick failed: " + e);
+        }
+    }
+
+    private void checkIdle() {
+        if (config.idleShutdownMinutes <= 0 || !running) {
+            return;
+        }
+        long idleNanos = System.nanoTime() - lastOccupied;
+        if (idleNanos >= (long) (config.idleShutdownMinutes * 60_000_000_000L)) {
+            log("Nobody on for " + config.idleShutdownMinutes + " minute(s) - shutting down");
+            // Once only: the tick keeps firing until the process has exited.
+            config.idleShutdownMinutes = 0;
+            onIdle.run();
+        }
+    }
+
+    private void broadcast(byte[] frame, ClientConnection except) {
+        for (ClientConnection player : players.values()) {
+            if (player != except) {
+                player.send(frame);
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Console
+    // ---------------------------------------------------------------------
+
+    /**
+     * Admin commands typed into the server window. When run as a background service there is no
+     * console, and the thread simply ends.
+     */
+    private void startConsole() {
+        Thread console = new Thread(() -> {
+            try (BufferedReader in = new BufferedReader(new InputStreamReader(System.in))) {
+                String line;
+                while (running && (line = in.readLine()) != null) {
+                    command(line.trim());
+                }
+            } catch (IOException e) {
+                // No console; nothing to read.
+            }
+        }, "console");
+        console.setDaemon(true);
+        console.start();
+    }
+
+    private void command(String line) {
+        if (line.isEmpty()) {
+            return;
+        }
+        String[] parts = line.split("\\s+", 2);
+        String argument = parts.length > 1 ? parts[1] : "";
+        switch (parts[0].toLowerCase()) {
+            case "list" -> log(players.size() + "/" + config.maxPlayers + " online: " + playerNames());
+            case "say" -> {
+                String text = Protocol.cleanChat(argument);
+                if (!text.isEmpty()) {
+                    broadcast(Protocol.encode(new Chat("", "[Server] " + text)), null);
+                    log("[Server] " + text);
+                }
+            }
+            case "kick" -> {
+                ClientConnection target = players.values().stream()
+                        .filter(p -> p.name.equalsIgnoreCase(argument.trim())).findFirst().orElse(null);
+                if (target == null) {
+                    log("No player called '" + argument + "'");
+                } else {
+                    target.close("You were kicked from the server.");
+                }
+            }
+            case "stop" -> System.exit(0); // runs the shutdown hook
+            default -> log("Commands: list, say <message>, kick <name>, stop");
+        }
+    }
+
+    private String playerNames() {
+        List<String> names = players.values().stream().map(p -> p.name).sorted().toList();
+        return names.isEmpty() ? "nobody" : String.join(", ", names);
+    }
+
+    void shutdown() {
+        if (!running) {
+            return;
+        }
+        running = false;
+        log("Shutting down");
+        for (ClientConnection player : players.values()) {
+            player.close("The server is shutting down.");
+        }
+        try {
+            // Give the writers a moment to deliver the goodbye before the process ends.
+            Thread.sleep(300);
+            if (listener != null) {
+                listener.close();
+            }
+        } catch (IOException | InterruptedException ignored) {
+            // Exiting anyway.
+        }
+        scheduler.shutdownNow();
+    }
+
+    static void log(String text) {
+        System.out.println("[" + LocalTime.now().format(CLOCK) + "] " + text);
+    }
+}

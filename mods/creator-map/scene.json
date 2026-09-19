@@ -1,0 +1,31 @@
+{
+  "name": "main",
+  "skyColor": [
+    0.53,
+    0.78,
+    0.95
+  ],
+  "groundPlatform": true,
+  "objects": [
+    {
+      "id": "ceb4115f-b380-4143-a65c-a1746452511a",
+      "name": "creatormap",
+      "asset": "creatormap.glb",
+      "position": {
+        "x": 0.95,
+        "y": 0.0,
+        "z": 8.08
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": true,
+      "script": ""
+    }
+  ]
+}

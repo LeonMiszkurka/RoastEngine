@@ -1,0 +1,144 @@
+{
+  "name": "main",
+  "skyColor": [
+    0.53,
+    0.78,
+    0.95
+  ],
+  "groundPlatform": true,
+  "objects": [
+    {
+      "id": "9e207b9f-b468-41dc-9352-e21f37eab197",
+      "name": "crash_dummy",
+      "asset": "crash_dummy.glb",
+      "position": {
+        "x": 19.64,
+        "y": 0.0,
+        "z": -21.55
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "script": ""
+    },
+    {
+      "id": "3810d93e-0cee-4bb6-83c3-a2a70cc75f1c",
+      "name": "the_landscape_is_a_forest_in_the_mountains",
+      "asset": "the_landscape_is_a_forest_in_the_mountains.glb",
+      "position": {
+        "x": 19.91,
+        "y": 0.0,
+        "z": -25.95
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "script": ""
+    },
+    {
+      "id": "6f785c38-3249-4a78-8087-90565a962231",
+      "name": "crash_dummy",
+      "asset": "crash_dummy.glb",
+      "position": {
+        "x": 17.16,
+        "y": 0.0,
+        "z": -25.6
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "script": ""
+    },
+    {
+      "id": "b4f2d87d-567c-435f-aba6-7b6955a45662",
+      "name": "crash_dummy",
+      "asset": "crash_dummy.glb",
+      "position": {
+        "x": 17.16,
+        "y": 0.0,
+        "z": -25.6
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "script": ""
+    },
+    {
+      "id": "dcdeb663-7ea5-49df-9b0f-bb72eebfd02e",
+      "name": "crash_dummy",
+      "asset": "crash_dummy.glb",
+      "position": {
+        "x": 17.16,
+        "y": 0.0,
+        "z": -25.6
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "script": ""
+    },
+    {
+      "id": "9fc711da-1b24-40cb-ab47-9aa5c65c48a5",
+      "name": "crash_dummy",
+      "asset": "crash_dummy.glb",
+      "position": {
+        "x": 17.16,
+        "y": 0.0,
+        "z": -25.6
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "script": ""
+    },
+    {
+      "id": "84eaf709-9aac-4582-9185-29f3a55b60e4",
+      "name": "crash_dummy",
+      "asset": "crash_dummy.glb",
+      "position": {
+        "x": 17.16,
+        "y": 0.0,
+        "z": -25.6
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "script": ""
+    }
+  ]
+}
