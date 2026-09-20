@@ -70,9 +70,11 @@ public final class NetClient {
      * Connects and says hello. Blocks for up to a few seconds, so call it off the main thread.
      *
      * @param address {@code host} or {@code host:port}
+     * @param ticket  a one-time join ticket from the player's account, or empty when signed out
+     * @param name    only used by test servers that run without accounts
      * @throws IOException with a message fit to show the player
      */
-    public static NetClient connect(String address, String name) throws IOException {
+    public static NetClient connect(String address, String ticket, String name) throws IOException {
         InetSocketAddress target = parse(address);
         String host = target.getHostString();
         int port = target.getPort();
@@ -83,7 +85,7 @@ public final class NetClient {
             socket.setTcpNoDelay(true);
             socket.setSoTimeout(CONNECT_TIMEOUT_MS);
             OutputStream out = socket.getOutputStream();
-            out.write(Protocol.encode(new Hello(Protocol.VERSION, name)));
+            out.write(Protocol.encode(new Hello(Protocol.VERSION, ticket, name)));
             out.flush();
 
             DataInputStream in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));

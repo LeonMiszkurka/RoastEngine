@@ -56,6 +56,12 @@ final class ClientConnection {
 
     /** Set once the server accepts the hello; null until then. */
     volatile String name;
+    /** Protocol.RANK_*, from the player's account. */
+    volatile int rank;
+    /** The account's id, or empty when the server runs without accounts. */
+    volatile String accountId = "";
+    /** Who last sent this player a private message, for /r. */
+    volatile String lastWhisperFrom;
     /** Latest position, or null until the first move arrives (not shown in snapshots until then). */
     volatile Move pose;
 
@@ -135,7 +141,7 @@ final class ClientConnection {
                 close("Expected a hello");
                 return;
             }
-            if (!server.join(this, hello)) {
+            if (!server.admit(this, hello)) {
                 return; // the server already said why
             }
             socket.setSoTimeout(IDLE_TIMEOUT_MS);
@@ -162,7 +168,7 @@ final class ClientConnection {
                 return;
             }
             if (!allowChat()) {
-                send(new Protocol.Chat("", "Slow down - you are sending messages too quickly."));
+                send(Protocol.Chat.system("Slow down - you are sending messages too quickly."));
                 return;
             }
             server.chat(this, text);

@@ -32,8 +32,8 @@ public final class MultiplayerSession {
     private static final float PING_INTERVAL = 2f;
     private static final int CHAT_HISTORY = 50;
 
-    /** One line in the chat log. {@code from} is empty for server notices. */
-    public record ChatLine(String from, String text, float time) {
+    /** One line in the chat log; {@code kind} is one of the Chat.* kinds. */
+    public record ChatLine(int kind, String from, int rank, String text, float time) {
     }
 
     private final NetClient client;
@@ -53,7 +53,7 @@ public final class MultiplayerSession {
         this.displayName = displayName;
         String motd = client.welcome().motd();
         if (!motd.isBlank()) {
-            chat.add(new ChatLine("", motd, 0f));
+            chat.add(new ChatLine(Chat.SYSTEM, "", Protocol.RANK_NORMAL, motd, 0f));
         }
     }
 
@@ -116,16 +116,19 @@ public final class MultiplayerSession {
             }
         } else if (message instanceof PlayerJoined joined) {
             if (joined.id() != client.welcome().yourId()) {
-                others.put(joined.id(), new RemotePlayer(joined.id(), joined.name()));
+                others.put(joined.id(), new RemotePlayer(joined.id(), joined.name(), joined.rank()));
             }
         } else if (message instanceof PlayerLeft left) {
             others.remove(left.id());
         } else if (message instanceof Chat line) {
-            chat.add(new ChatLine(line.from(), line.text(), clock));
+            chat.add(new ChatLine(line.kind(), line.from(), line.rank(), line.text(), clock));
             while (chat.size() > CHAT_HISTORY) {
                 chat.remove(0);
             }
-            System.out.println("[Chat] " + (line.from().isEmpty() ? "" : "<" + line.from() + "> ") + line.text());
+            if (line.kind() == Chat.PUBLIC || line.kind() == Chat.SYSTEM) {
+                // Private messages stay out of the log file.
+                System.out.println("[Chat] " + (line.from().isEmpty() ? "" : "<" + line.from() + "> ") + line.text());
+            }
         } else if (message instanceof SessionUpdate update) {
             session = update;
         } else if (message instanceof Pong pong) {
@@ -172,6 +175,10 @@ public final class MultiplayerSession {
 
     public String myName() {
         return client.welcome().name();
+    }
+
+    public int myRank() {
+        return client.welcome().rank();
     }
 
     public String serverName() {

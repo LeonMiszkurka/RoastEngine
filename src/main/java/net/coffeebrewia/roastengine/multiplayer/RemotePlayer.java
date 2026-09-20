@@ -26,6 +26,8 @@ public final class RemotePlayer {
 
     public final int id;
     public final String name;
+    /** Protocol.RANK_*, for the tag over their head. */
+    public final int rank;
     private final ArrayDeque<Sample> samples = new ArrayDeque<>();
 
     /** Where to draw this frame, updated by {@link #advance}. */
@@ -38,9 +40,16 @@ public final class RemotePlayer {
     public float walkPhase;
     private boolean placed;
 
-    RemotePlayer(int id, String name) {
+    RemotePlayer(int id, String name, int rank) {
         this.id = id;
         this.name = name;
+        this.rank = rank;
+    }
+
+    /** The name as shown to others: with a rank tag in front, if they have one. */
+    public String taggedName() {
+        String tag = net.coffeebrewia.roastengine.net.Protocol.rankTag(rank);
+        return tag.isEmpty() ? name : tag + " " + name;
     }
 
     /** True once at least one position has arrived; until then there is nothing to draw. */

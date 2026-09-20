@@ -41,18 +41,28 @@ dependencies {
     implementation 'org.lwjgl:lwjgl-stb'
     implementation 'org.lwjgl:lwjgl-assimp'   // .obj / .glb / .gltf / .fbx model loading
     implementation 'org.lwjgl:lwjgl-openal'   // sound effects and music
+    implementation 'org.lwjgl:lwjgl-tinyfd'   // "Install Mod from File..." picker
     runtimeOnly "org.lwjgl:lwjgl::${lwjglNatives}"
     runtimeOnly "org.lwjgl:lwjgl-glfw::${lwjglNatives}"
     runtimeOnly "org.lwjgl:lwjgl-opengl::${lwjglNatives}"
     runtimeOnly "org.lwjgl:lwjgl-stb::${lwjglNatives}"
     runtimeOnly "org.lwjgl:lwjgl-assimp::${lwjglNatives}"
     runtimeOnly "org.lwjgl:lwjgl-openal::${lwjglNatives}"
+    runtimeOnly "org.lwjgl:lwjgl-tinyfd::${lwjglNatives}"
 
     implementation "org.joml:joml:${jomlVersion}"
     implementation "com.google.code.gson:gson:${gsonVersion}"
 
     // Multiplayer messages, shared with the dedicated server.
     implementation project(':Protocol')
+
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
 }
 
 java {
@@ -95,7 +105,7 @@ tasks.named('run') {
     ['playerModelOffset', 'playerModelYaw', 'playerModelScale', 'playerModel', 'hands',
      'autoWalk', 'playerHeight', 'startYaw', 'autoInteract', 'spawnAt',
      'headHideRadius', 'sipsToPassOut', 'passOutAt', 'startMenu', 'forceShaders',
-     'modsDir', 'configDir', 'join', 'playerName', 'autoPick', 'server.1.wakeUrl'].each { name ->
+     'modsDir', 'configDir', 'join', 'playerName', 'autoPick', 'server.1.wakeUrl', 'accountsUrl', 'autoChat', 'autoCheats', 'openCheatMenu'].each { name ->
         if (project.hasProperty(name)) {
             systemProperty "roastengine.${name}", project.property(name)
         }
@@ -442,4 +452,41 @@ tasks.register('packageRelease') {
     group = 'distribution'
     description = 'Builds every release zip into build/release/.'
     dependsOn 'packageMacRelease', 'packageLinuxRelease_x64', 'packageLinuxRelease_arm64'
+}
+
+
+// ---------------------------------------------------------------------------
+// Mod zips for the packs shipped with the engine (the APIs, the sample device mod,
+// the Bypass API and the Roast Hack client):
+//
+//   ./gradlew packMods   ->  build/packs/<nameId>-<version>.zip, ready to install or upload
+// ---------------------------------------------------------------------------
+
+tasks.register('packMods') {
+    group = 'distribution'
+    description = 'Zips every mod in packs/ into build/packs/.'
+    def packsDir = layout.projectDirectory.dir('packs').asFile
+    def outDir = layout.buildDirectory.dir('packs')
+    outputs.dir(outDir)
+    doLast {
+        def out = outDir.get().asFile
+        out.mkdirs()
+        packsDir.listFiles({ File f -> f.isDirectory() } as FileFilter).sort().each { pack ->
+            def modJson = new File(pack, 'mod.json')
+            if (!modJson.isFile()) {
+                throw new GradleException("packs/${pack.name} has no mod.json")
+            }
+            def json = new groovy.json.JsonSlurper().parse(modJson)
+            def zip = new File(out, "${json.nameId ?: pack.name}-${json.version ?: '1.0.0'}.zip")
+            zip.delete()
+            // Zip the pack's contents, so the mod's files sit at the root of the zip.
+            def process = new ProcessBuilder(['zip', '-qr', zip.path, '.'])
+                    .directory(pack).redirectErrorStream(true).start()
+            def output = process.inputStream.text
+            if (process.waitFor() != 0) {
+                throw new GradleException("zip failed for ${pack.name}:\n${output}")
+            }
+            println "Packed ${json.name}: ${zip}"
+        }
+    }
 }

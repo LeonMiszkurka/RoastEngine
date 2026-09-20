@@ -39,6 +39,9 @@ if ! grep -qs '^idleShutdownMinutes' "$SETTINGS"; then
     chown roastengine:roastengine "$SETTINGS"
 fi
 
+# server.properties holds the account service's serverKey: only the server may read it.
+chmod 600 "$SETTINGS"
+
 echo "== Installing the service"
 cp "$HERE/deploy/roastengine-server.service" /etc/systemd/system/roastengine-server.service
 systemctl daemon-reload

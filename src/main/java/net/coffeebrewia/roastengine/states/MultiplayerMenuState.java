@@ -43,7 +43,8 @@ public final class MultiplayerMenuState implements GameState {
     private final GameState returnState;
     private final Ui ui;
     private final Renderer2D r;
-    private final TextField nameField = new TextField("Your name", false, Protocol.MAX_NAME);
+    /** Only for test servers that run without accounts, used while signed out. */
+    private final TextField nameField = new TextField("Test name (servers without accounts)", false, Protocol.MAX_NAME);
     private final TextField addressField = new TextField("Address  (host or host:port)", false, 128);
 
     private final List<Entry> servers = ServerList.load();
@@ -151,12 +152,23 @@ public final class MultiplayerMenuState implements GameState {
         float fx = px;
         float fy = 110;
 
-        float nameW = Math.min(300f, pw);
-        fy += ui.textField(nameField, fx, fy, nameW) + 20;
-        boolean nameOk = Protocol.cleanName(nameField.text()).length() >= 2;
-        if (!nameOk) {
-            r.text("Pick a name of at least 2 letters or numbers.", fx + nameW + 16, fy - 40, 1.25f, Theme.ERROR);
+        // Who is playing: the CoffeeBrew account. Official servers need one.
+        var account = engine.account();
+        boolean signedIn = account.isSignedIn();
+        if (signedIn) {
+            String tag = Protocol.rankTag(account.rank());
+            r.text("Playing as", fx, fy, 1.25f, Theme.TEXT_MUTED);
+            r.text((tag.isEmpty() ? "" : tag + " ") + account.username(), fx, fy + 16, 2f,
+                    account.rank() > Protocol.RANK_NORMAL ? Theme.ACCENT : Theme.TEXT);
+            fy += 52;
+        } else {
+            r.text("Sign in to a CoffeeBrew Interactive account on the main menu to join servers.",
+                    fx, fy, 1.5f, Theme.ERROR);
+            fy += 26;
         }
+        // Signed in, every server is joined with the account. Signed out, only test servers
+        // (by address) can be joined, under a test name.
+        boolean nameOk = signedIn || Protocol.cleanName(nameField.text()).length() >= 2;
 
         // The list.
         float listH = Math.max(1, servers.size()) * (ROW_HEIGHT + 8) + 56;
@@ -177,6 +189,9 @@ public final class MultiplayerMenuState implements GameState {
         // Direct connect, for testing or someone else's server.
         r.text("OR CONNECT BY ADDRESS", fx, fy, 1.25f, Theme.TEXT_MUTED);
         fy += 18;
+        if (!signedIn) {
+            fy += ui.textField(nameField, fx, fy, Math.min(300f, pw)) + 8;
+        }
         float joinW = 100;
         ui.textField(addressField, fx, fy, pw - joinW - 10);
         boolean canDirect = joining == null && !joiningDirect && nameOk && !addressField.text().isBlank();
@@ -213,7 +228,7 @@ public final class MultiplayerMenuState implements GameState {
         r.text(r.ellipsize(line, w - 200, 1.25f), x + 34, y + 38, 1.25f,
                 status.state() == State.ERROR && joining != entry ? Theme.ERROR : Theme.TEXT_MUTED);
 
-        boolean canJoin = joining == null && !joiningDirect && nameOk && entry.isSetUp();
+        boolean canJoin = joining == null && !joiningDirect && engine.account().isSignedIn() && entry.isSetUp();
         String label = joining == entry ? "Joining..." : status.state() == State.ASLEEP ? "Wake & Join" : "Join";
         if (ui.button(label, x + w - 160, y + 14, 148, 36, canJoin)) {
             join(entry);
@@ -257,11 +272,20 @@ public final class MultiplayerMenuState implements GameState {
     // Joining
     // ---------------------------------------------------------------------
 
+    /** The name sent along: the account's when signed in, else the test name. */
     private String playerName() {
+        if (engine.account().isSignedIn()) {
+            return engine.account().username();
+        }
         String name = Protocol.cleanName(nameField.text());
         engine.settings().playerName = name;
         engine.settings().save();
         return name;
+    }
+
+    /** A join ticket when signed in; empty otherwise (only test servers accept that). */
+    private String ticket() throws IOException {
+        return engine.account().isSignedIn() ? engine.account().joinTicket() : "";
     }
 
     /** Joins a listed server, waking it first if it is asleep. */
@@ -273,7 +297,7 @@ public final class MultiplayerMenuState implements GameState {
         int thisAttempt = ++attempt;
         engine.background().submit(() -> {
             try {
-                NetClient client = entry.join(name,
+                NetClient client = entry.join(this::ticket, name,
                         status -> engine.runOnMainThread(() -> progress(thisAttempt, status)),
                         () -> thisAttempt != attempt);
                 engine.runOnMainThread(() -> connected(thisAttempt, client, entry.name()));
@@ -295,7 +319,7 @@ public final class MultiplayerMenuState implements GameState {
         engine.settings().save();
         engine.background().submit(() -> {
             try {
-                NetClient client = NetClient.connect(address, name);
+                NetClient client = NetClient.connect(address, ticket(), name);
                 engine.runOnMainThread(() -> connected(thisAttempt, client, address.trim()));
             } catch (IOException | RuntimeException e) {
                 String reason = e.getMessage() == null ? e.toString() : e.getMessage();

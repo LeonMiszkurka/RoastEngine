@@ -125,6 +125,98 @@ Amount **$5**, your email, **Create budget**. AWS emails you if the month's bill
 
 ---
 
+## 7. CoffeeBrew Interactive accounts
+
+Accounts live in DynamoDB and are handled by a second Lambda,
+[`Server/aws/accounts_lambda.py`](aws/accounts_lambda.py). One account works across every
+CoffeeBrew game, so this part isn't tied to RoastEngine. Multiplayer requires an account; ranks
+and bans are kept per account and apply on every server.
+
+**Cost:** DynamoDB on-demand and Lambda both cost essentially nothing at this size (pennies a month
+at most, often free).
+
+### 7.1 Two tables
+
+AWS console, **DynamoDB**, **Create table**, twice (same region as everything else):
+
+| Table name | Partition key | Settings |
+|---|---|---|
+| `CoffeeBrewAccounts` | `username` (String) | Default settings (on-demand) |
+| `CoffeeBrewSessions` | `tokenHash` (String) | Default settings; afterwards open it, **Additional settings > Time to Live > Turn on**, attribute name `expiresAt` |
+
+Time to Live lets DynamoDB delete old sign-ins and join tickets by itself.
+
+### 7.2 A server key
+
+This is a long random secret that proves a game server is really yours. In Terminal on your Mac:
+
+```
+openssl rand -hex 32
+```
+
+Copy the result. It goes in two places below, and nowhere else (don't put it in the game).
+
+### 7.3 The accounts Lambda
+
+**Lambda, Create function**: *Author from scratch*, name `coffeebrew-accounts`, Runtime **Python 3**
+(newest), Architecture **arm64**. Then:
+
+1. **Code:** replace `lambda_function.py` with [`Server/aws/accounts_lambda.py`](aws/accounts_lambda.py),
+   then **Deploy**.
+2. **Configuration > Environment variables:** `SERVER_KEY` = the key from 7.2.
+3. **Configuration > General configuration:** Memory **512 MB** (passwords are hashed with scrypt,
+   which is slow on purpose and wants the memory), Timeout **10 sec**.
+4. **Configuration > Permissions:** click the role, then **Add permissions > Create inline policy >
+   JSON**, paste [`Server/aws/accounts-policy.json`](aws/accounts-policy.json), and name it
+   `coffeebrew-account-tables`.
+5. **Configuration > Function URL > Create:** Auth type **NONE**. Copy the URL.
+
+### 7.4 Connect the game and the server
+
+- **Game:** paste the URL into
+  [`src/main/resources/coffeebrew-defaults.properties`](../src/main/resources/coffeebrew-defaults.properties)
+  as `accountsUrl=...` and rebuild. The main menu's **CoffeeBrew Interactive** panel then lets
+  players create an account or log in.
+- **Server:** wake it, log in (see *Looking after it*), and edit the settings:
+  ```
+  sudo nano /opt/roastengine-server/data/server.properties
+  ```
+  Set `accountsUrl=` to the same URL and `serverKey=` to the key from 7.2, then
+  `sudo systemctl restart roastengine-server`.
+
+### 7.5 Make yourself Owner
+
+Create your account in the game first. Then in **DynamoDB, Tables, CoffeeBrewAccounts, Explore
+table items**, open your username (it's stored in lower case), change **rank** from `normal` to
+`owner`, and **Save**. Use `moderator` or `admin` the same way for your helpers. Ranks can only be changed here,
+never from inside the game. Your new tag shows from your next join (or the next time the main
+menu opens).
+
+To **reset a forgotten password**, delete that player's item so they can create the account again.
+There's no email recovery yet. To **unban** someone outside the game, set `banned` to false.
+
+| Rank (the `rank` value) | Tag | Can |
+|---|---|---|
+| `normal` | none | chat, `/msg <name> <text>`, `/r <text>`, `/list`, `/help` |
+| `moderator` | [Mod] | + `/kick <name> [reason]`, `/ban <name> [reason]` (bans cover every server) |
+| `admin` | [Admin] | + `/unban <name>` |
+| `owner` | [Owner] | everything |
+
+Nobody can kick or ban someone of their own rank or higher, so moderators can't remove each other,
+the admins or you.
+
+### Testing accounts on your Mac
+
+```
+python3 Server/aws/local_accounts.py --rank YourName=owner
+```
+
+This runs the account service locally with a throwaway database. Start a local server with
+`accountsUrl=http://127.0.0.1:8770/` and `serverKey=local-test-key-please-change` in
+`Server/run/server.properties`, and the game with `./gradlew run -PaccountsUrl=http://127.0.0.1:8770/`.
+
+---
+
 ## Looking after it
 
 The machine must be on to log in: click **Wake & Join** on server_1 (or **Start** on the EC2 page),

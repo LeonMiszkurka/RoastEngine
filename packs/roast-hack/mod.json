@@ -1,0 +1,8 @@
+{
+  "name": "Roast Hack",
+  "nameId": "roast-hack",
+  "version": "1.0.0",
+  "type": "mod",
+  "engine": "RoastEngine 0.1",
+  "description": "A hack client for RoastEngine. Press Tab for the menu: flight, noclip, speed, teleports, third person, freecam, player ESP and readouts. Needs the Bypass API installed and enabled."
+}

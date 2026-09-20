@@ -34,7 +34,7 @@ import java.util.List;
  */
 public final class Protocol {
 
-    public static final int VERSION = 2;
+    public static final int VERSION = 4;
     public static final int DEFAULT_PORT = 25570;
     /** Snapshots per second from the server, and moves per second from each client. */
     public static final int TICK_RATE = 20;
@@ -70,6 +70,32 @@ public final class Protocol {
             StatusRequest, StatusReply {
     }
 
+    /** Ranks, lowest first. A higher rank can moderate every rank below it. */
+    public static final int RANK_NORMAL = 0;
+    public static final int RANK_MODERATOR = 1;
+    public static final int RANK_ADMIN = 2;
+    public static final int RANK_OWNER = 3;
+
+    /** The tag shown before a name: nothing for normal players. */
+    public static String rankTag(int rank) {
+        return switch (rank) {
+            case RANK_OWNER -> "[Owner]";
+            case RANK_ADMIN -> "[Admin]";
+            case RANK_MODERATOR -> "[Mod]";
+            default -> "";
+        };
+    }
+
+    /** "owner" / "moderator" / anything else, as the account service spells them. */
+    public static int rankFromName(String name) {
+        return switch (name == null ? "" : name) {
+            case "owner" -> RANK_OWNER;
+            case "admin" -> RANK_ADMIN;
+            case "moderator" -> RANK_MODERATOR;
+            default -> RANK_NORMAL;
+        };
+    }
+
     /**
      * A mod as another computer can find it: by mod.io id when it came from mod.io (0 otherwise),
      * else by its folder name ({@code key}) or display name.
@@ -79,8 +105,12 @@ public final class Protocol {
 
     // --- Client to server ---------------------------------------------------------------
 
-    /** First message on a new connection. */
-    public record Hello(int version, String name) implements Message {
+    /**
+     * First message on a new connection. {@code ticket} is a one-time join ticket from the
+     * CoffeeBrew account service; the server redeems it to learn who this is. {@code name} is only
+     * used by a server running without accounts, for testing.
+     */
+    public record Hello(int version, String ticket, String name) implements Message {
     }
 
     /**
@@ -114,7 +144,7 @@ public final class Protocol {
      * Accepted. {@code name} is the name actually given, which differs from the one asked for
      * when someone on the server already has it.
      */
-    public record Welcome(int yourId, String name, String serverName, String motd,
+    public record Welcome(int yourId, String name, int rank, String serverName, String motd,
                           int maxPlayers) implements Message {
     }
 
@@ -143,7 +173,7 @@ public final class Protocol {
     public record Rejected(String reason) implements Message {
     }
 
-    public record PlayerJoined(int id, String name) implements Message {
+    public record PlayerJoined(int id, String name, int rank) implements Message {
     }
 
     public record PlayerLeft(int id) implements Message {
@@ -156,8 +186,25 @@ public final class Protocol {
     public record Snapshot(List<Pose> poses) implements Message {
     }
 
-    /** A line of chat. {@code from} is empty for messages from the server itself. */
-    public record Chat(String from, String text) implements Message {
+    /**
+     * A line of chat.
+     *
+     * @param kind {@link #PUBLIC}, {@link #SYSTEM} (from the server; {@code from} is empty),
+     *             {@link #WHISPER_FROM} (a private message {@code from} someone) or
+     *             {@link #WHISPER_TO} (your own private message, echoed back; {@code from} is who
+     *             it went to)
+     * @param rank the rank of {@code from}, for its tag
+     */
+    public record Chat(int kind, String from, int rank, String text) implements Message {
+        public static final int PUBLIC = 0;
+        public static final int SYSTEM = 1;
+        public static final int WHISPER_FROM = 2;
+        public static final int WHISPER_TO = 3;
+
+        /** A message from the server itself. */
+        public static Chat system(String text) {
+            return new Chat(SYSTEM, "", RANK_NORMAL, text);
+        }
     }
 
     // --- Encoding -----------------------------------------------------------------------
@@ -185,11 +232,13 @@ public final class Protocol {
         if (message instanceof Hello m) {
             out.writeByte(HELLO);
             out.writeInt(m.version());
+            out.writeUTF(m.ticket());
             out.writeUTF(m.name());
         } else if (message instanceof Welcome m) {
             out.writeByte(WELCOME);
             out.writeInt(m.yourId());
             out.writeUTF(m.name());
+            out.writeByte(m.rank());
             out.writeUTF(m.serverName());
             out.writeUTF(m.motd());
             out.writeShort(m.maxPlayers());
@@ -200,6 +249,7 @@ public final class Protocol {
             out.writeByte(PLAYER_JOINED);
             out.writeInt(m.id());
             out.writeUTF(m.name());
+            out.writeByte(m.rank());
         } else if (message instanceof PlayerLeft m) {
             out.writeByte(PLAYER_LEFT);
             out.writeInt(m.id());
@@ -228,7 +278,9 @@ public final class Protocol {
             out.writeUTF(m.text());
         } else if (message instanceof Chat m) {
             out.writeByte(CHAT);
+            out.writeByte(m.kind());
             out.writeUTF(m.from());
+            out.writeByte(m.rank());
             out.writeUTF(m.text());
         } else if (message instanceof Ping m) {
             out.writeByte(PING);
@@ -285,11 +337,11 @@ public final class Protocol {
     private static Message readBody(DataInputStream in) throws IOException {
         int type = in.readUnsignedByte();
         return switch (type) {
-            case HELLO -> new Hello(in.readInt(), in.readUTF());
-            case WELCOME -> new Welcome(in.readInt(), in.readUTF(), in.readUTF(), in.readUTF(),
-                    in.readUnsignedShort());
+            case HELLO -> readHello(in);
+            case WELCOME -> new Welcome(in.readInt(), in.readUTF(), in.readUnsignedByte(), in.readUTF(),
+                    in.readUTF(), in.readUnsignedShort());
             case REJECTED -> new Rejected(in.readUTF());
-            case PLAYER_JOINED -> new PlayerJoined(in.readInt(), in.readUTF());
+            case PLAYER_JOINED -> new PlayerJoined(in.readInt(), in.readUTF(), in.readUnsignedByte());
             case PLAYER_LEFT -> new PlayerLeft(in.readInt());
             case MOVE -> new Move(in.readFloat(), in.readFloat(), in.readFloat(),
                     in.readFloat(), in.readFloat(), in.readBoolean());
@@ -303,7 +355,7 @@ public final class Protocol {
                 yield new Snapshot(poses);
             }
             case CHAT_SEND -> new ChatSend(in.readUTF());
-            case CHAT -> new Chat(in.readUTF(), in.readUTF());
+            case CHAT -> new Chat(in.readUnsignedByte(), in.readUTF(), in.readUnsignedByte(), in.readUTF());
             case PING -> new Ping(in.readLong());
             case PONG -> new Pong(in.readLong());
             case SESSION_UPDATE -> new SessionUpdate(in.readUnsignedByte(), in.readUTF(),
@@ -314,6 +366,18 @@ public final class Protocol {
                     in.readUnsignedShort(), in.readUTF());
             default -> throw new IOException("Unknown message type " + type);
         };
+    }
+
+    /**
+     * The version comes first so a server can turn away an older game with a clear message
+     * instead of failing to read the rest of a hello that has changed shape.
+     */
+    private static Hello readHello(DataInputStream in) throws IOException {
+        int version = in.readInt();
+        if (version != VERSION) {
+            return new Hello(version, "", "");
+        }
+        return new Hello(version, in.readUTF(), in.readUTF());
     }
 
     /** A null reference is written as a single false. */

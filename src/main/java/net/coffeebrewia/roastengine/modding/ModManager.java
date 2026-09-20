@@ -272,6 +272,51 @@ public final class ModManager {
         }
     }
 
+    /**
+     * Installs a mod straight from a zip on this computer - an <b>external mod</b>: one that is
+     * not on mod.io, such as a hack client or something a friend sent. The zip is the same shape
+     * the Creator exports, and the original file is left where it is.
+     *
+     * <p>External mods have no mod.io id, so other players can't be sent them automatically; the
+     * world picker says as much when one is chosen for a multiplayer session.
+     */
+    public LocalMod installExternal(Path zipFile) throws IOException {
+        String fileName = zipFile.getFileName().toString();
+        String stem = fileName.toLowerCase(java.util.Locale.ROOT).endsWith(".zip")
+                ? fileName.substring(0, fileName.length() - 4) : fileName;
+        Path staging = modsDirectory.resolve(".staging").resolve(safeFolderName(stem));
+        deleteRecursively(staging);
+        Files.createDirectories(staging);
+        try {
+            extractZip(zipFile, staging);
+            // The mod's own mod.json names it; the file name is the fallback.
+            JsonObject modJson = readJson(staging.resolve(AUTHOR_MANIFEST));
+            String name = modJson.has("name") ? modJson.get("name").getAsString() : stem;
+            String nameId = modJson.has("nameId") ? modJson.get("nameId").getAsString() : stem;
+
+            JsonObject manifest = new JsonObject();
+            manifest.addProperty("name", name);
+            manifest.addProperty("nameId", nameId);
+            manifest.addProperty("modIoId", 0);
+            manifest.addProperty("modfileId", 0);
+            manifest.addProperty("author", modJson.has("author") ? modJson.get("author").getAsString() : "unknown");
+            manifest.addProperty("external", true);
+            manifest.addProperty("installedFrom", fileName);
+            manifest.addProperty("installedAt", java.time.Instant.now().toString());
+            Files.writeString(staging.resolve(INSTALL_MANIFEST), gson.toJson(manifest));
+
+            Path target = modsDirectory.resolve(safeFolderName(nameId));
+            deleteRecursively(target);
+            Files.move(staging, target, StandardCopyOption.ATOMIC_MOVE);
+            scan();
+            return installed.stream().filter(m -> m.folder().equals(target)).findFirst()
+                    .orElseThrow(() -> new IOException("Installed mod not found after scan"));
+        } catch (IOException | RuntimeException e) {
+            deleteRecursively(staging);
+            throw e;
+        }
+    }
+
     private static String safeFolderName(String nameId) {
         String cleaned = nameId == null ? "" : nameId.replaceAll("[^A-Za-z0-9._-]", "_");
         if (cleaned.isBlank() || cleaned.startsWith(".")) {

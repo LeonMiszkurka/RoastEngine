@@ -1,0 +1,8 @@
+{
+  "name": "Bypass API",
+  "nameId": "bypass-api",
+  "version": "1.0.0",
+  "type": "api",
+  "engine": "RoastEngine 0.1",
+  "description": "The API hack clients need. On its own it does nothing: it only unlocks what a hack client is allowed to switch on. Install it, enable it, then install a hack client such as Roast Hack. Turn this off and every hack client turns off with it."
+}

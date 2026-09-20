@@ -38,8 +38,8 @@ class ProtocolTest {
     @Test
     void everyMessageSurvivesARoundTrip() throws IOException {
         List<Message> messages = List.of(
-                new Hello(Protocol.VERSION, "Leon"),
-                new Welcome(7, "Leon2", "Server", "Hi there", 16),
+                new Hello(Protocol.VERSION, "ticket-abc", "Leon"),
+                new Welcome(7, "Leon2", Protocol.RANK_OWNER, "Server", "Hi there", 16),
                 new SessionUpdate(SessionUpdate.WAITING, "Ana", null, List.of()),
                 new SessionUpdate(SessionUpdate.READY, "",
                         new ModRef(6386524, "creator-map", "Creator Map"),
@@ -48,14 +48,15 @@ class ProtocolTest {
                 new StatusRequest(),
                 new StatusReply("server_1", "Hi", 3, 16, "The Club"),
                 new Rejected("Full"),
-                new PlayerJoined(3, "Ana"),
+                new PlayerJoined(3, "Ana", Protocol.RANK_MODERATOR),
                 new PlayerLeft(3),
                 new Move(1.5f, 1.7f, -20f, 3.1f, -0.4f, true),
                 new Snapshot(List.of(new Pose(1, 0, 1.7f, 2, 0.5f, 0, false),
                         new Pose(2, -4, 1.7f, 9, 1f, 0.2f, true))),
                 new Snapshot(List.of()),
                 new ChatSend("hello world"),
-                new Chat("", "Ana joined the game"),
+                Chat.system("Ana joined the game"),
+                new Chat(Chat.WHISPER_FROM, "Ana", Protocol.RANK_MODERATOR, "psst"),
                 new Ping(123456789L),
                 new Pong(-1L));
         for (Message message : messages) {
@@ -65,13 +66,13 @@ class ProtocolTest {
 
     @Test
     void framesReadBackToBackFromOneStream() throws IOException {
-        byte[] a = Protocol.encode(new Chat("a", "one"));
+        byte[] a = Protocol.encode(new Chat(Chat.PUBLIC, "a", 0, "one"));
         byte[] b = Protocol.encode(new PlayerLeft(9));
         byte[] both = new byte[a.length + b.length];
         System.arraycopy(a, 0, both, 0, a.length);
         System.arraycopy(b, 0, both, a.length, b.length);
         DataInputStream in = new DataInputStream(new ByteArrayInputStream(both));
-        assertEquals(new Chat("a", "one"), Protocol.read(in));
+        assertEquals(new Chat(Chat.PUBLIC, "a", 0, "one"), Protocol.read(in));
         assertEquals(new PlayerLeft(9), Protocol.read(in));
     }
 
@@ -85,6 +86,19 @@ class ProtocolTest {
         assertThrows(IOException.class, () -> Protocol.read(stream(0xFF, 0xFF)));
         // A move frame cut short inside its own length.
         assertThrows(IOException.class, () -> Protocol.read(stream(0, 3, 6, 0, 0)));
+    }
+
+    @Test
+    void ranksHaveTagsAndNamesBothWays() {
+        assertEquals("[Owner]", Protocol.rankTag(Protocol.RANK_OWNER));
+        assertEquals("[Admin]", Protocol.rankTag(Protocol.RANK_ADMIN));
+        assertEquals("[Mod]", Protocol.rankTag(Protocol.RANK_MODERATOR));
+        assertEquals("", Protocol.rankTag(Protocol.RANK_NORMAL));
+        assertEquals(Protocol.RANK_ADMIN, Protocol.rankFromName("admin"));
+        assertEquals(Protocol.RANK_OWNER, Protocol.rankFromName("owner"));
+        // Anything unknown is an ordinary player - never a higher rank.
+        assertEquals(Protocol.RANK_NORMAL, Protocol.rankFromName("emperor"));
+        assertEquals(Protocol.RANK_NORMAL, Protocol.rankFromName(null));
     }
 
     @Test

@@ -226,6 +226,15 @@ Then the lobby:
   is marked "only on your computer" in the picker, because nobody else can get it.
 - **Shaders and controllers** (API and device mods) stay each player's own and aren't part of the pick.
 
+**Accounts:** multiplayer needs a **CoffeeBrew Interactive** account (main menu, under mod.io),
+one account for every CoffeeBrew game. The account name is the in-game name. Ranks are normal,
+**[Mod]**, **[Admin]** and **[Owner]**, set only in DynamoDB. Chat commands: `/msg <name> <text>`
+(`/w`, `/tell`, `/pm`), `/r`, `/list`, `/help`; moderators and above also `/kick` and `/ban`
+(every server), admins and above `/unban`. See
+[Server/DEPLOY-AWS.md](Server/DEPLOY-AWS.md#7-coffeebrew-interactive-accounts). The service is
+[Server/aws/accounts_lambda.py](Server/aws/accounts_lambda.py); `local_accounts.py` runs it locally
+for testing.
+
 In the game, everyone else walks around with name tags. **T** (or Enter) opens the chat, **/**
 starts a command (`/list`), and holding **Tab** shows who's on. Doors and drinks stay local to
 each player. Only positions and chat are shared.
@@ -257,6 +266,46 @@ snapshot of all players 20 times a second. Other players are drawn 100 ms in the
 between snapshots, so network jitter doesn't show as stutter. The server trusts the positions it's
 sent (there is no anti-cheat), limits names and chat, throttles chat floods, and drops
 connections that go quiet for 15 seconds or fall too far behind.
+
+## Hack clients (the Bypass API)
+
+The engine can fly the player, walk through walls, see other players through them and so on - but
+only when two mods say so:
+
+```
+Bypass API (an API mod)     bypass/api.json   which cheats are unlocked at all
+Roast Hack (a mod)          hack/client.json  which of them appear in the menu, and on which keys
+```
+
+With the API switched off, every hack client switches off with it and the game behaves exactly as
+it does with no mods. With both on, the client's key (Tab by default) opens its menu:
+
+| Tab | Cheats |
+|---|---|
+| Movement | flight, noclip, infinite sprint, speed, jump height, flight speed |
+| View | third person, freecam (your body stays put), field of view, teleport to where you look, save/go to a spot |
+| World | never pass out, no fall damage, instant doors, see players through walls |
+| Info | position/speed/FPS readout, ping graph |
+
+The pieces:
+[Cheat](src/main/java/net/coffeebrewia/roastengine/bypass/Cheat.java) is the list the engine can
+do, [BypassApi](src/main/java/net/coffeebrewia/roastengine/bypass/BypassApi.java) unlocks them,
+[HackClient](src/main/java/net/coffeebrewia/roastengine/bypass/HackClient.java) lays them out, and
+[Cheats](src/main/java/net/coffeebrewia/roastengine/bypass/Cheats.java) holds what is on. Adding a
+cheat means adding it to `Cheat.ALL`, handling it in the sandbox, and listing it in a newer
+Bypass API - no change to any client.
+
+Both mods live in [packs/](packs/); `./gradlew packMods` zips everything there into
+`build/packs/`. Online, cheats work like any other movement: the server takes players at their
+word about where they are, so others see you fly. Dev aids: `-PautoCheats=fly,fov=110` and
+`-PopenCheatMenu`.
+
+## External mods (installing a zip)
+
+**Install Mod from File...** on the main menu installs any mod zip that never went through
+mod.io - a hack client, or a world someone sent you. It's the same zip the Creator exports.
+External mods have no mod.io id, so other players can't be sent them automatically; the
+multiplayer world picker marks them "only on your computer".
 
 ## Mod types and enabling
 

@@ -51,6 +51,17 @@ public final class MainMenuState implements GameState {
     private final TextField emailField = new TextField("Email address", false, 128);
     private final TextField codeField = new TextField("5-digit code", false, 8);
 
+    /** The CoffeeBrew Interactive sign-in dialog, when open. */
+    private enum AccountDialog {NONE, LOG_IN, CREATE}
+
+    private static final float ACCOUNT_PANEL_HEIGHT = 124f;
+    private final TextField accountName = new TextField("Username", false, 16);
+    private final TextField accountPassword = new TextField("Password", true, 200);
+    private final TextField accountConfirm = new TextField("Password again", true, 200);
+    private AccountDialog accountDialog = AccountDialog.NONE;
+    private boolean accountBusy;
+    private String accountMessage = "";
+
     private AuthStep authStep = AuthStep.SIGNED_OUT;
     private String authMessage = "";
     private boolean authFailed;
@@ -69,6 +80,7 @@ public final class MainMenuState implements GameState {
     private String creatorNotice = "";
     private boolean creatorNoticeIsError;
     private float creatorNoticeTimer;
+    private boolean installingExternal;
 
     public MainMenuState(Engine engine, ConnectionStatus initialConnection) {
         this.engine = engine;
@@ -80,6 +92,8 @@ public final class MainMenuState implements GameState {
     @Override
     public void enter() {
         engine.input().setCursorCaptured(false);
+        // Picks up a rank changed in the meantime, and notices a session that has run out.
+        engine.account().refresh();
         engine.audio().playMusic(net.coffeebrewia.roastengine.audio.SoundBank.MUSIC_MENU);
         if (firstEnter) {
             firstEnter = false;
@@ -107,6 +121,41 @@ public final class MainMenuState implements GameState {
         }
     }
 
+    /**
+     * Installs a mod from a zip the player picks. Mods from mod.io arrive through the browser;
+     * this is for everything else - a hack client, or a world a friend sent over.
+     */
+    private void installExternalMod() {
+        java.nio.file.Path zip = net.coffeebrewia.roastengine.ui.FilePicker.openZip("Install a mod from a zip");
+        if (zip == null) {
+            return;
+        }
+        installingExternal = true;
+        setCreatorNotice("Installing " + zip.getFileName() + "...", false);
+        engine.background().submit(() -> {
+            try {
+                LocalMod installed = engine.modManager().installExternal(zip);
+                engine.runOnMainThread(() -> {
+                    installingExternal = false;
+                    icons.dispose(); // it may ship its own artwork
+                    setCreatorNotice("Installed " + installed.name() + " - switch it on below", false);
+                });
+            } catch (IOException | RuntimeException e) {
+                engine.runOnMainThread(() -> {
+                    installingExternal = false;
+                    setCreatorNotice("Could not install that zip: " + e.getMessage(), true);
+                });
+            }
+        });
+    }
+
+    private void setCreatorNotice(String text, boolean error) {
+        creatorNotice = text;
+        creatorNoticeIsError = error;
+        creatorNoticeTimer = 8f;
+        System.out.println("[Mods] " + text);
+    }
+
     /** Starts the Creator in its own process (it is a separate Gradle module). */
     private void launchCreator() {
         String error = CreatorLauncher.launch();
@@ -124,6 +173,8 @@ public final class MainMenuState implements GameState {
         float h = engine.window().height();
 
         ui.begin(deltaSeconds);
+        // With the sign-in dialog open, the menu behind it must not react to clicks.
+        ui.setInputBlocked(accountDialog != AccountDialog.NONE);
 
         // Header
         r.text("RoastEngine", 40, 26, 4f, Theme.TEXT);
@@ -142,17 +193,134 @@ public final class MainMenuState implements GameState {
         if (ui.button("Open RoastEngine Creator", leftX, top + 112, leftW, 40)) {
             launchCreator();
         }
+        // External mods: a zip that never went through mod.io, such as a hack client.
+        if (ui.button("Install Mod from File...", leftX, top + 160, leftW, 36, !installingExternal)) {
+            installExternalMod();
+        }
         if (creatorNoticeTimer > 0) {
-            r.text(r.ellipsize(creatorNotice, leftW, 1.25f), leftX, top + 156, 1.25f,
+            r.text(r.ellipsize(creatorNotice, leftW, 1.25f), leftX, top + 202, 1.25f,
                     creatorNoticeIsError ? Theme.ERROR : Theme.SUCCESS);
         }
 
-        drawConnectPanel(leftX, top + 172, leftW, h - top - 172 - 30);
+        float panelsTop = top + 220;
+        float modIoHeight = h - panelsTop - 30 - ACCOUNT_PANEL_HEIGHT - 12;
+        drawConnectPanel(leftX, panelsTop, leftW, modIoHeight);
+        drawAccountPanel(leftX, panelsTop + modIoHeight + 12, leftW, ACCOUNT_PANEL_HEIGHT);
 
         float browserX = leftX + leftW + 24;
         drawModBrowser(browserX, top, w - browserX - 40, h - top - 30);
+        if (accountDialog != AccountDialog.NONE) {
+            ui.setInputBlocked(false);
+            drawAccountDialog(w, h);
+        }
 
         ui.end();
+    }
+
+    // ---------------------------------------------------------------------
+    // CoffeeBrew Interactive account
+    // ---------------------------------------------------------------------
+
+    /** One account for every CoffeeBrew Interactive game; multiplayer needs it. */
+    private void drawAccountPanel(float x, float y, float w, float h) {
+        ui.panel("CoffeeBrew Interactive", x, y, w, h);
+        float fx = x + 16;
+        float fw = w - 32;
+        float fy = y + 50;
+        var account = engine.account();
+        if (!account.isAvailable()) {
+            r.text("Accounts are coming soon.", fx, fy, 1.5f, Theme.TEXT_MUTED);
+            return;
+        }
+        if (account.isSignedIn()) {
+            String tag = net.coffeebrewia.roastengine.net.Protocol.rankTag(account.rank());
+            r.text(r.ellipsize((tag.isEmpty() ? "" : tag + " ") + account.username(), fw - 110, 2f), fx, fy + 4, 2f,
+                    tag.isEmpty() ? Theme.SUCCESS : Theme.ACCENT);
+            if (ui.button("Sign Out", fx + fw - 100, fy, 100, 30)) {
+                account.signOut();
+                accountMessage = "";
+            }
+            r.text("Signed in - ready for multiplayer.", fx, fy + 40, 1.25f, Theme.TEXT_MUTED);
+            return;
+        }
+        float half = (fw - 10) / 2f;
+        if (ui.button("Log In", fx, fy, half, 34)) {
+            openAccountDialog(AccountDialog.LOG_IN);
+        }
+        if (ui.button("Create Account", fx + half + 10, fy, half, 34)) {
+            openAccountDialog(AccountDialog.CREATE);
+        }
+        r.text("Needed for multiplayer. One account for every CoffeeBrew game.", fx, fy + 44, 1.25f,
+                Theme.TEXT_MUTED);
+    }
+
+    private void openAccountDialog(AccountDialog which) {
+        accountDialog = which;
+        accountPassword.setText("");
+        accountConfirm.setText("");
+        accountMessage = "";
+        ui.clearFocus();
+    }
+
+    private void drawAccountDialog(float w, float h) {
+        boolean creating = accountDialog == AccountDialog.CREATE;
+        ui.modalBackdrop(w, h);
+        float dw = 420;
+        float dh = creating ? 380 : 320;
+        float x = (w - dw) / 2f;
+        float y = (h - dh) / 2f;
+        ui.panel(creating ? "Create a CoffeeBrew Account" : "Log In to CoffeeBrew", x, y, dw, dh);
+        float fx = x + 20;
+        float fw = dw - 40;
+        float fy = y + 54;
+        fy += ui.textField(accountName, fx, fy, fw) + 10;
+        fy += ui.textField(accountPassword, fx, fy, fw) + 10;
+        if (creating) {
+            fy += ui.textField(accountConfirm, fx, fy, fw) + 6;
+            r.text("3-16 letters, numbers or _   |   password: 8+ characters", fx, fy, 1.1f, Theme.TEXT_MUTED);
+            fy += 18;
+        }
+        fy += 6;
+        String problem = creating && !accountConfirm.text().equals(accountPassword.text())
+                && !accountConfirm.text().isEmpty() ? "The passwords don't match." : "";
+        boolean ready = !accountBusy && accountName.text().length() >= 3 && accountPassword.text().length() >= 8
+                && (!creating || accountConfirm.text().equals(accountPassword.text()));
+        float half = (fw - 12) / 2f;
+        String label = accountBusy ? "Please wait..." : creating ? "Create Account" : "Log In";
+        if (ui.button(label, fx, fy, half, 38, ready)
+                || (ready && engine.input().wasKeyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER))) {
+            submitAccount(creating);
+        }
+        if (ui.button("Cancel", fx + half + 12, fy, half, 38, !accountBusy)) {
+            accountDialog = AccountDialog.NONE;
+            accountPassword.setText("");
+            accountConfirm.setText("");
+        }
+        fy += 50;
+        String shown = !problem.isEmpty() ? problem : accountMessage;
+        if (!shown.isEmpty()) {
+            r.text(r.ellipsize(shown, fw, 1.25f), fx, fy, 1.25f, accountBusy ? Theme.TEXT_MUTED : Theme.ERROR);
+        }
+    }
+
+    private void submitAccount(boolean creating) {
+        accountBusy = true;
+        accountMessage = creating ? "Creating your account..." : "Logging in...";
+        String name = accountName.text().trim();
+        String password = accountPassword.text();
+        var account = engine.account();
+        (creating ? account.register(name, password) : account.login(name, password))
+                .whenComplete((ignored, error) -> engine.runOnMainThread(() -> {
+                    accountBusy = false;
+                    if (error != null) {
+                        accountMessage = net.coffeebrewia.roastengine.account.CoffeeBrewAccount.cause(error).getMessage();
+                        return;
+                    }
+                    accountDialog = AccountDialog.NONE;
+                    accountPassword.setText("");
+                    accountConfirm.setText("");
+                    accountMessage = "";
+                }));
     }
 
     // ---------------------------------------------------------------------

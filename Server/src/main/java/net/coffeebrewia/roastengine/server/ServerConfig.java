@@ -27,6 +27,15 @@ final class ServerConfig {
      * the cloud setup turns into powering the machine off. 0 keeps it running forever.
      */
     double idleShutdownMinutes = 0;
+    /**
+     * The CoffeeBrew Interactive account service. Set, every player must sign in, and ranks and
+     * bans come from it. Empty runs without accounts, for testing: players pick any name.
+     */
+    String accountsUrl = "";
+    /** Proves to the account service that this is a real server. Secret: keep this file private. */
+    String serverKey = "";
+    /** Without accounts only: ranks for testing, e.g. Leon=owner,Ana=moderator. */
+    String localRanks = "";
 
     static ServerConfig load(Path file) throws IOException {
         ServerConfig config = new ServerConfig();
@@ -45,6 +54,9 @@ final class ServerConfig {
         config.world = props.getProperty("world", config.world).trim();
         config.maxPlayers = integer(props, "maxPlayers", config.maxPlayers, 1, 256);
         config.idleShutdownMinutes = decimal(props, "idleShutdownMinutes", config.idleShutdownMinutes);
+        config.accountsUrl = props.getProperty("accountsUrl", config.accountsUrl).trim();
+        config.serverKey = props.getProperty("serverKey", config.serverKey).trim();
+        config.localRanks = props.getProperty("localRanks", config.localRanks).trim();
         if (!props.stringPropertyNames().containsAll(KEYS)) {
             config.save(file); // an older file: fill in the new settings, keeping the values
         }
@@ -52,7 +64,8 @@ final class ServerConfig {
     }
 
     private static final java.util.List<String> KEYS =
-            java.util.List.of("port", "name", "motd", "world", "maxPlayers", "idleShutdownMinutes");
+            java.util.List.of("port", "name", "motd", "world", "maxPlayers", "idleShutdownMinutes",
+                    "accountsUrl", "serverKey", "localRanks");
 
     private void save(Path file) throws IOException {
         Properties props = new Properties();
@@ -63,10 +76,15 @@ final class ServerConfig {
         props.setProperty("maxPlayers", String.valueOf(maxPlayers));
         props.setProperty("idleShutdownMinutes", idleShutdownMinutes == Math.rint(idleShutdownMinutes)
                 ? String.valueOf((long) idleShutdownMinutes) : String.valueOf(idleShutdownMinutes));
+        props.setProperty("accountsUrl", accountsUrl);
+        props.setProperty("serverKey", serverKey);
+        props.setProperty("localRanks", localRanks);
         try (OutputStream out = Files.newOutputStream(file)) {
             props.store(out, "RoastEngine server. world = the world mod everyone plays "
                     + "(name or folder), or empty to let each player use their own. "
-                    + "idleShutdownMinutes = turn off after this long with nobody on (0 = never).");
+                    + "idleShutdownMinutes = turn off after this long with nobody on (0 = never). "
+                    + "accountsUrl + serverKey = the CoffeeBrew account service (empty: no accounts, "
+                    + "for testing; then localRanks gives test ranks, e.g. Leon=owner,Ana=moderator).");
         }
     }
 

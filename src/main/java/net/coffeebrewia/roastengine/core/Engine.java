@@ -53,6 +53,7 @@ public final class Engine {
     private final GameSettings settings;
     private final AudioEngine audio;
     private final ModConfig modConfig;
+    private final net.coffeebrewia.roastengine.account.CoffeeBrewAccount account;
     private final ModManager modManager;
     private final ModIoClient modIo;
     /** Produces the first state to enter once the window and renderer exist. */
@@ -80,6 +81,8 @@ public final class Engine {
         this.modConfig = new ModConfig(config.configDirectory().resolve("modio.properties"));
         this.modManager = new ModManager(config.modsDirectory());
         this.modIo = new ModIoClient(modConfig, background);
+        this.account = new net.coffeebrewia.roastengine.account.CoffeeBrewAccount(
+                config.configDirectory().resolve("coffeebrew.properties"), background);
     }
 
     public void run() {
@@ -109,6 +112,8 @@ public final class Engine {
 
         while (running && !window.shouldClose()) {
             long now = System.nanoTime();
+            boolean background = !window.isFocused();
+            window.setBackground(background);
             float delta = Math.min((now - lastTime) / 1_000_000_000f, MAX_DELTA);
             lastTime = now;
 
@@ -126,6 +131,9 @@ public final class Engine {
             handleScreenshots(delta);
             input.endFrame();
             window.swapBuffers();
+            if (background) {
+                idleUntil(now + BACKGROUND_FRAME_NANOS);
+            }
 
             frames++;
             fpsTimer += delta;
@@ -133,6 +141,20 @@ public final class Engine {
                 fps = frames / fpsTimer;
                 frames = 0;
                 fpsTimer = 0f;
+            }
+        }
+    }
+
+    /** 30 frames a second in the background: enough to stay online, easy on the battery. */
+    private static final long BACKGROUND_FRAME_NANOS = 1_000_000_000L / 30;
+
+    private static void idleUntil(long deadline) {
+        long wait = deadline - System.nanoTime();
+        if (wait > 0) {
+            try {
+                Thread.sleep(wait / 1_000_000L, (int) (wait % 1_000_000L));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
         }
     }
@@ -228,6 +250,11 @@ public final class Engine {
 
     public AudioEngine audio() {
         return audio;
+    }
+
+    /** The player's CoffeeBrew Interactive account (needed for multiplayer). */
+    public net.coffeebrewia.roastengine.account.CoffeeBrewAccount account() {
+        return account;
     }
 
     public ModConfig modConfig() {

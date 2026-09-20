@@ -29,6 +29,9 @@ public final class Window {
     private int framebufferWidth;
     private int framebufferHeight;
 
+    private boolean vsync;
+    private boolean inBackground;
+
     public Window(String title, int width, int height) {
         this.title = title;
         this.width = width;
@@ -53,7 +56,11 @@ public final class Window {
 
         handle = glfwCreateWindow(width, height, title, NULL, NULL);
         if (handle == NULL) {
-            throw new IllegalStateException("Failed to create the GLFW window");
+            // By far the likeliest reason: graphics without OpenGL 3.3 (older Chromebooks, virtual
+            // machines). Said plainly, since this lands in the log a player sends in.
+            throw new IllegalStateException("Could not open the game window. RoastEngine needs graphics "
+                    + "that support OpenGL 3.3 - on a Chromebook or virtual machine, check that GPU "
+                    + "acceleration is on, and on a PC, update the graphics driver.");
         }
 
         centerOnPrimaryMonitor();
@@ -68,6 +75,7 @@ public final class Window {
         });
 
         glfwMakeContextCurrent(handle);
+        this.vsync = vsync;
         glfwSwapInterval(vsync ? 1 : 0);
         GL.createCapabilities();
 
@@ -103,6 +111,24 @@ public final class Window {
 
     public void swapBuffers() {
         glfwSwapBuffers(handle);
+    }
+
+    /** True while the window has the keyboard, i.e. the player is looking at it. */
+    public boolean isFocused() {
+        return glfwGetWindowAttrib(handle, GLFW_FOCUSED) == GLFW_TRUE;
+    }
+
+    /**
+     * Switches vsync off while in the background. On macOS a vsync'd swap can wait a very long
+     * time while the window is covered or minimised, which would slow the whole game - online,
+     * the player would stop sending updates and drop out. The engine caps the frame rate itself
+     * while in the background instead.
+     */
+    public void setBackground(boolean background) {
+        if (background != inBackground) {
+            inBackground = background;
+            glfwSwapInterval(vsync && !background ? 1 : 0);
+        }
     }
 
     public void destroy() {

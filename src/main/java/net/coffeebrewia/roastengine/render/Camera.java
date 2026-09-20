@@ -45,6 +45,17 @@ public final class Camera {
         position.y += amount;
     }
 
+    /**
+     * The direction the camera looks, pitch included - for anything that follows the crosshair,
+     * such as a ray into the world.
+     */
+    public Vector3f forward(Vector3f out) {
+        float cosPitch = (float) Math.cos(pitch);
+        return out.set((float) Math.sin(yaw) * cosPitch,
+                -(float) Math.sin(pitch),
+                -(float) Math.cos(yaw) * cosPitch).normalize();
+    }
+
     public Matrix4f viewMatrix() {
         return view.identity()
                 .rotateX(pitch)

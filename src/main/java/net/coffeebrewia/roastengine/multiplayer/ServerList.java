@@ -113,14 +113,16 @@ public final class ServerList {
          * Joins, waking the server first when it is asleep. Blocks - possibly for a minute or two -
          * so call it off the main thread.
          *
+         * @param tickets   gives a fresh one-time join ticket; asked right before each attempt,
+         *                  since a ticket only lasts a minute and waking can take longer
          * @param progress  receives short status lines to show the player
          * @param cancelled polled between attempts; true stops waiting
          * @throws IOException with a message fit to show the player
          */
-        public NetClient join(String playerName, Consumer<String> progress, BooleanSupplier cancelled)
-                throws IOException {
+        public NetClient join(Ticketer tickets, String playerName, Consumer<String> progress,
+                              BooleanSupplier cancelled) throws IOException {
             if (wakeUrl.isEmpty()) {
-                return NetClient.connect(address, playerName);
+                return NetClient.connect(address, tickets.ticket(), playerName);
             }
             long deadline = System.nanoTime() + GIVE_UP_AFTER.toNanos();
             while (!cancelled.getAsBoolean()) {
@@ -130,8 +132,11 @@ public final class ServerList {
                 JsonObject answer = ask(false);
                 switch (text(answer, "status")) {
                     case "ready" -> {
+                        String server = addressOf(answer);
                         try {
-                            return NetClient.connect(addressOf(answer), playerName);
+                            // Only fetch a ticket once something is listening, or it may expire.
+                            NetClient.queryStatus(server);
+                            return NetClient.connect(server, tickets.ticket(), playerName);
                         } catch (NetClient.NotReachableException e) {
                             progress.accept("Almost there - " + name + " is starting up...");
                         }
@@ -181,6 +186,12 @@ public final class ServerList {
         private static String text(JsonObject object, String key) {
             return object.has(key) && !object.get(key).isJsonNull() ? object.get(key).getAsString() : "";
         }
+    }
+
+    /** Hands out join tickets (from the player's account); may block. */
+    @FunctionalInterface
+    public interface Ticketer {
+        String ticket() throws IOException;
     }
 
     /** The configured servers, in order. */

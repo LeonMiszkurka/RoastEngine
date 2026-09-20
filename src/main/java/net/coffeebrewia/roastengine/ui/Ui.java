@@ -45,7 +45,10 @@ public final class Ui {
         return r;
     }
 
+    private boolean inputBlocked;
+
     public void begin(float deltaSeconds) {
+        inputBlocked = false;
         caretBlink = (caretBlink + deltaSeconds) % 1f;
         // Any click unfocuses the active field unless a text field claims it this frame.
         clickedEmptySpace = input.wasMousePressed(GLFW_MOUSE_BUTTON_LEFT);
@@ -67,7 +70,18 @@ public final class Ui {
         focused = null;
     }
 
+    /**
+     * While true, nothing counts as hovered, so no widget reacts. Set it while drawing the screen
+     * behind a dialog, and clear it before drawing the dialog, so clicks can't reach through.
+     */
+    public void setInputBlocked(boolean blocked) {
+        inputBlocked = blocked;
+    }
+
     public boolean isHovered(float x, float y, float w, float h) {
+        if (inputBlocked) {
+            return false;
+        }
         float mx = input.mouseX();
         float my = input.mouseY();
         return mx >= x && mx < x + w && my >= y && my < y + h;

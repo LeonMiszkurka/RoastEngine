@@ -77,6 +77,9 @@ public final class RoastServer {
     private long lastOccupied = System.nanoTime();
     /** What happens when the idle limit is reached; the tests swap out the real exit. */
     private final Runnable onIdle;
+    /** Null when running without accounts (a test server). */
+    private final AccountService accounts;
+    private final ChatCommands commands = new ChatCommands(this);
 
     // The session. Guarded by this server's lock.
     private ModRef world;
@@ -91,6 +94,7 @@ public final class RoastServer {
     RoastServer(ServerConfig config, Runnable onIdle) {
         this.config = config;
         this.onIdle = onIdle;
+        this.accounts = config.accountsUrl.isEmpty() ? null : new AccountService(config.accountsUrl, config.serverKey);
         resetSession();
     }
 
@@ -119,6 +123,8 @@ public final class RoastServer {
         listener = new ServerSocket(config.port);
         log("'" + config.name + "' listening on port " + port() + " (max " + config.maxPlayers
                 + " players" + (config.world.isEmpty() ? "" : ", world: " + config.world) + ")");
+        log(accounts == null ? "No account service (accountsUrl is empty): anyone can join with any name"
+                : "Players sign in through " + config.accountsUrl);
         if (config.idleShutdownMinutes > 0) {
             log("Will shut down after " + config.idleShutdownMinutes + " minute(s) with nobody on");
         }
@@ -148,44 +154,99 @@ public final class RoastServer {
     // Called from connection threads
     // ---------------------------------------------------------------------
 
+    /** Who a player is, once their hello has been checked. */
+    private record Identity(String name, int rank, String accountId) {
+    }
+
     /**
-     * Admits a player, or refuses them with a reason. Synchronized so two people asking for the
-     * same name at the same moment cannot both get it.
+     * Checks a new player's hello - version, then account - and joins them. Runs on the player's
+     * own connection thread, since asking the account service takes a moment.
      *
      * @return true when welcomed
      */
-    synchronized boolean join(ClientConnection client, Hello hello) {
+    boolean admit(ClientConnection client, Hello hello) {
         if (hello.version() != Protocol.VERSION) {
             client.close(hello.version() < Protocol.VERSION
                     ? "Your game is out of date. Please update RoastEngine to play here."
                     : "This server is out of date. It runs an older version of RoastEngine.");
             return false;
         }
+        Identity identity;
+        if (accounts != null) {
+            if (hello.ticket().isEmpty()) {
+                client.close("Sign in to a CoffeeBrew Interactive account (main menu) to play online.");
+                return false;
+            }
+            try {
+                AccountService.Account account = accounts.redeem(hello.ticket());
+                if (account.banned()) {
+                    client.close("You're banned from multiplayer: " + account.banReason());
+                    log(account.username() + " was turned away (banned)");
+                    return false;
+                }
+                identity = new Identity(account.username(), account.rank(), account.accountId());
+            } catch (AccountService.Refused e) {
+                client.close(e.getMessage());
+                return false;
+            }
+        } else {
+            String wanted = Protocol.cleanName(hello.name());
+            if (wanted.length() < 2) {
+                client.close("Pick a name of at least 2 letters or numbers.");
+                return false;
+            }
+            identity = new Identity(wanted, localRank(wanted), "");
+        }
+        return join(client, identity);
+    }
+
+    /** Without accounts: the test rank from localRanks in server.properties. */
+    private int localRank(String name) {
+        for (String pair : config.localRanks.split(",")) {
+            String[] parts = pair.trim().split("=", 2);
+            if (parts.length == 2 && parts[0].trim().equalsIgnoreCase(name)) {
+                return Protocol.rankFromName(parts[1].trim().toLowerCase());
+            }
+        }
+        return Protocol.RANK_NORMAL;
+    }
+
+    /** Synchronized so two people asking for the same name at the same moment cannot both get it. */
+    private synchronized boolean join(ClientConnection client, Identity identity) {
+        if (!identity.accountId().isEmpty()) {
+            // The same account again (a second computer, or a reconnect before the old one timed
+            // out): the newer connection wins.
+            players.values().stream().filter(p -> p.accountId.equals(identity.accountId())).findFirst()
+                    .ifPresent(old -> old.close("You joined from somewhere else."));
+        }
         if (players.size() >= config.maxPlayers) {
             client.close("The server is full (" + config.maxPlayers + " players).");
             return false;
         }
-        String wanted = Protocol.cleanName(hello.name());
-        if (wanted.length() < 2) {
-            client.close("Pick a name of at least 2 letters or numbers.");
-            return false;
-        }
-        String name = uniqueName(wanted);
+        // Account names are unique already; test names get a number when someone has them.
+        String name = identity.accountId().isEmpty() ? uniqueName(identity.name()) : identity.name();
         client.name = name;
+        client.rank = identity.rank();
+        client.accountId = identity.accountId();
 
-        client.send(new Welcome(client.id, name, config.name, config.motd, config.maxPlayers));
+        client.send(new Welcome(client.id, name, client.rank, config.name, config.motd, config.maxPlayers));
         for (ClientConnection other : players.values()) {
-            client.send(new PlayerJoined(other.id, other.name));
+            client.send(new PlayerJoined(other.id, other.name, other.rank));
         }
         players.put(client.id, client);
         if (world == null && chooser == null) {
             chooser = client; // first in: they pick
         }
         client.send(sessionFor(client));
-        broadcast(Protocol.encode(new PlayerJoined(client.id, name)), client);
-        broadcast(Protocol.encode(new Chat("", name + " joined the game")), null);
-        log(name + " joined from " + client.address() + " (" + players.size() + " online)");
+        broadcast(Protocol.encode(new PlayerJoined(client.id, name, client.rank)), client);
+        broadcast(Protocol.encode(Chat.system(name + " joined the game")), null);
+        log(name + joinedAs(client.rank) + " joined from " + client.address() + " (" + players.size() + " online)");
         return true;
+    }
+
+    private static String joinedAs(int rank) {
+        String tag = Protocol.rankTag(rank);
+        return tag.isEmpty() ? "" : " " + tag;
     }
 
     /** The session as this player should see it: ready, their turn to pick, or waiting. */
@@ -213,7 +274,7 @@ public final class RoastServer {
         }
         ModRef picked = cleanRef(choice.world());
         if (picked == null) {
-            client.send(new Chat("", "That world could not be used - pick another."));
+            client.send(Chat.system("That world could not be used - pick another."));
             client.send(sessionFor(client));
             return;
         }
@@ -229,7 +290,7 @@ public final class RoastServer {
         chooser = null;
         sendSessionToAll();
         String withMods = mods.isEmpty() ? "" : " with " + mods.size() + " mod(s)";
-        broadcast(Protocol.encode(new Chat("", client.name + " picked " + picked.name() + withMods)), null);
+        broadcast(Protocol.encode(Chat.system(client.name + " picked " + picked.name() + withMods)), null);
         log(client.name + " picked " + picked.name() + withMods);
     }
 
@@ -271,7 +332,7 @@ public final class RoastServer {
             return; // never got in
         }
         broadcast(Protocol.encode(new PlayerLeft(client.id)), null);
-        broadcast(Protocol.encode(new Chat("", client.name + " left the game")), null);
+        broadcast(Protocol.encode(Chat.system(client.name + " left the game")), null);
         log(client.name + " left" + (reason == null ? "" : " (" + reason + ")")
                 + " (" + players.size() + " online)");
 
@@ -287,17 +348,34 @@ public final class RoastServer {
         }
     }
 
+    /** A line from a player: a /command, or chat for everyone. Runs on that player's thread. */
     void chat(ClientConnection client, String text) {
-        if (text.equalsIgnoreCase("/list") || text.equalsIgnoreCase("/who")) {
-            client.send(new Chat("", players.size() + " online: " + playerNames()));
-            return;
-        }
         if (text.startsWith("/")) {
-            client.send(new Chat("", "Commands: /list"));
+            commands.run(client, text);
             return;
         }
         log("<" + client.name + "> " + text);
-        broadcast(Protocol.encode(new Chat(client.name, text)), null);
+        broadcast(Protocol.encode(new Chat(Chat.PUBLIC, client.name, client.rank, text)), null);
+    }
+
+    // --- For ChatCommands ---------------------------------------------------------------
+
+    /** The online player with this name (any case), or null. */
+    ClientConnection player(String name) {
+        return players.values().stream().filter(p -> p.name.equalsIgnoreCase(name)).findFirst().orElse(null);
+    }
+
+    void broadcastSystem(String text) {
+        broadcast(Protocol.encode(Chat.system(text)), null);
+    }
+
+    /** Null when the server runs without accounts. */
+    AccountService accounts() {
+        return accounts;
+    }
+
+    String playerList() {
+        return players.size() + "/" + config.maxPlayers + " online: " + playerNames();
     }
 
     /** Runs a task on the server's scheduler thread after a delay. */
@@ -389,7 +467,7 @@ public final class RoastServer {
             case "say" -> {
                 String text = Protocol.cleanChat(argument);
                 if (!text.isEmpty()) {
-                    broadcast(Protocol.encode(new Chat("", "[Server] " + text)), null);
+                    broadcastSystem("[Server] " + text);
                     log("[Server] " + text);
                 }
             }
@@ -408,7 +486,8 @@ public final class RoastServer {
     }
 
     private String playerNames() {
-        List<String> names = players.values().stream().map(p -> p.name).sorted().toList();
+        List<String> names = players.values().stream()
+                .map(p -> (Protocol.rankTag(p.rank) + " " + p.name).trim()).sorted().toList();
         return names.isEmpty() ? "nobody" : String.join(", ", names);
     }
 

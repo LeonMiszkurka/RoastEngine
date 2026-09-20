@@ -25,6 +25,10 @@ public final class ChatBox {
     private static final int SHOWN_LINES = 8;
     private static final float SCALE = 1.5f;
     private static final float LINE_HEIGHT = 18f;
+    /** Private messages, so they stand out from public chat. */
+    private static final Color WHISPER = Color.rgb(0xC9A2F0);
+    /** Moderators' and owners' public lines. */
+    private static final Color STAFF = Color.rgb(0xF2C46B);
 
     private final StringBuilder draft = new StringBuilder();
     private boolean open;
@@ -81,6 +85,18 @@ public final class ChatBox {
         return true;
     }
 
+    /** How a line reads: a rank tag before staff names, and private messages marked as such. */
+    private static String format(MultiplayerSession.ChatLine line) {
+        String tag = Protocol.rankTag(line.rank());
+        String who = tag.isEmpty() ? line.from() : tag + " " + line.from();
+        return switch (line.kind()) {
+            case Protocol.Chat.SYSTEM -> line.text();
+            case Protocol.Chat.WHISPER_FROM -> "[from " + who + "] " + line.text();
+            case Protocol.Chat.WHISPER_TO -> "[to " + who + "] " + line.text();
+            default -> who + ": " + line.text();
+        };
+    }
+
     public void draw(Renderer2D r, List<MultiplayerSession.ChatLine> lines, float now,
                      float windowWidth, float windowHeight) {
         float x = 12;
@@ -97,9 +113,13 @@ public final class ChatBox {
             if (alpha <= 0f) {
                 break; // older lines are older still
             }
-            String text = line.from().isEmpty() ? line.text() : "<" + line.from() + "> " + line.text();
+            String text = format(line);
             y -= LINE_HEIGHT;
-            Color color = line.from().isEmpty() ? Theme.ACCENT : Theme.TEXT;
+            Color color = switch (line.kind()) {
+                case Protocol.Chat.SYSTEM -> Theme.ACCENT;
+                case Protocol.Chat.WHISPER_FROM, Protocol.Chat.WHISPER_TO -> WHISPER;
+                default -> line.rank() > Protocol.RANK_NORMAL ? STAFF : Theme.TEXT;
+            };
             r.rect(x - 4, y - 2, width, LINE_HEIGHT, Color.rgb(0x000000).withAlpha(0.35f * alpha));
             String fitted = r.ellipsize(text, width - 8, SCALE);
             r.text(fitted, x + 1, y + 1, SCALE, shadow.withAlpha(0.6f * alpha));

@@ -1,0 +1,11 @@
+{
+  "name": "Bypass API",
+  "version": "1.0.0",
+  "_comment": "Everything this version unlocks. A hack client can only use what is listed here.",
+  "cheats": [
+    "fly", "noclip", "infiniteSprint", "speed", "jump", "flySpeed",
+    "teleportToLook", "saveSpot", "loadSpot", "thirdPerson", "freecam", "fov",
+    "neverPassOut", "instantDoors", "playerEsp", "noFall",
+    "showInfo", "showPing"
+  ]
+}

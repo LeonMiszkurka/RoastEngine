@@ -42,6 +42,7 @@ class RoastServerTest {
         ServerConfig config = new ServerConfig();
         config.port = 0;
         config.maxPlayers = 3;
+        config.localRanks = "Boss=owner, Ad=admin, Mo=moderator";
         server = new RoastServer(config);
         server.bind();
         Thread accept = new Thread(() -> {
@@ -99,7 +100,7 @@ class RoastServerTest {
 
     private TestClient join(String name) throws IOException {
         TestClient client = new TestClient();
-        client.send(new Hello(Protocol.VERSION, name));
+        client.send(new Hello(Protocol.VERSION, "", name));
         return client;
     }
 
@@ -140,7 +141,7 @@ class RoastServerTest {
     @Test
     void refusesWrongVersionFullServerAndBadNames() throws IOException {
         try (TestClient old = new TestClient()) {
-            old.send(new Hello(Protocol.VERSION - 1, "Old"));
+            old.send(new Hello(Protocol.VERSION - 1, "", "Old"));
             assertTrue(assertInstanceOf(Rejected.class, old.read()).reason().contains("out of date"));
         }
         try (TestClient blank = join("!!")) {
@@ -259,13 +260,59 @@ class RoastServerTest {
     }
 
     @Test
+    void privateMessagesReachOnlyTheirTargetAndCanBeAnswered() throws IOException {
+        try (TestClient ana = join("Ana"); TestClient ben = join("Ben"); TestClient cara = join("Cara")) {
+            for (TestClient c : List.of(ana, ben, cara)) {
+                c.await(SessionUpdate.class, u -> true);
+            }
+            ana.send(new ChatSend("/msg ben meet at the door"));
+            Chat got = ben.await(Chat.class, c -> c.kind() == Chat.WHISPER_FROM);
+            assertEquals("Ana", got.from());
+            assertEquals("meet at the door", got.text());
+            assertEquals("Ben", ana.await(Chat.class, c -> c.kind() == Chat.WHISPER_TO).from());
+
+            ben.send(new ChatSend("/r ok"));
+            assertEquals("ok", ana.await(Chat.class, c -> c.kind() == Chat.WHISPER_FROM).text());
+
+            // Cara saw none of it: the next thing she gets is the public line.
+            ana.send(new ChatSend("hello all"));
+            Chat next = cara.await(Chat.class, c -> c.kind() != Chat.SYSTEM);
+            assertEquals(Chat.PUBLIC, next.kind());
+            assertEquals("hello all", next.text());
+        }
+    }
+
+    @Test
+    void onlyHigherRanksCanKick() throws IOException {
+        try (TestClient boss = join("Boss"); TestClient mo = join("Mo"); TestClient ann = join("Ann")) {
+            assertEquals(Protocol.RANK_OWNER, boss.await(Welcome.class, w -> true).rank());
+            mo.await(Welcome.class, w -> true);
+            ann.await(Welcome.class, w -> true);
+
+            ann.send(new ChatSend("/kick Mo"));
+            ann.await(Chat.class, c -> c.text().contains("Only moderators"));
+            mo.send(new ChatSend("/kick Boss"));
+            mo.await(Chat.class, c -> c.text().contains("can't do that"));
+
+            // Unbanning is for admins and owners, not moderators.
+            mo.send(new ChatSend("/unban Someone"));
+            mo.await(Chat.class, c -> c.text().contains("Only admins and owners can unban"));
+
+            mo.send(new ChatSend("/kick Ann being rude"));
+            Rejected kicked = ann.await(Rejected.class, r -> true);
+            assertTrue(kicked.reason().contains("kicked by Mo: being rude"));
+            boss.await(Chat.class, c -> c.text().contains("Ann was kicked by Mo"));
+        }
+    }
+
+    @Test
     void floodedChatIsThrottled() throws IOException {
         try (TestClient ana = join("Ana")) {
             ana.await(Welcome.class, w -> true);
             for (int i = 0; i < 8; i++) {
                 ana.send(new ChatSend("spam " + i));
             }
-            ana.await(Chat.class, c -> c.from().isEmpty() && c.text().contains("Slow down"));
+            ana.await(Chat.class, c -> c.kind() == Chat.SYSTEM && c.text().contains("Slow down"));
         }
     }
 }

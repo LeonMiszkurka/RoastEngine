@@ -26,6 +26,7 @@ public final class Interactions {
 
     /** How far the player can reach. */
     public static final float REACH = 2.6f;
+    private boolean instantDoors;
     /** How wide the "in front of me" cone is: 1 = dead ahead, 0 = ninety degrees off. */
     private static final float MIN_FACING = 0.35f;
     /** Seconds a door takes to swing open. */
@@ -135,6 +136,11 @@ public final class Interactions {
     }
 
     /** Advances doors and the drinking animation. */
+    /** With this on, doors jump open or shut instead of swinging (the Bypass API's instantDoors). */
+    public void setInstantDoors(boolean instant) {
+        this.instantDoors = instant;
+    }
+
     public void update(LoadedWorld world, float delta, boolean interactHeld) {
         if (pendingDoor != null) {
             pendingTimer -= delta;
@@ -150,7 +156,7 @@ public final class Interactions {
                     continue;
                 }
                 float goal = object.doorWantsOpen ? 1f : 0f;
-                float step = DOOR_SPEED * delta;
+                float step = instantDoors ? 1f : DOOR_SPEED * delta;
                 object.openAmount = goal > object.openAmount
                         ? Math.min(goal, object.openAmount + step)
                         : Math.max(goal, object.openAmount - step);

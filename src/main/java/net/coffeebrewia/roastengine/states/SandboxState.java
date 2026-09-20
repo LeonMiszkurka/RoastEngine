@@ -8,6 +8,8 @@ import net.coffeebrewia.roastengine.input.Input;
 import net.coffeebrewia.roastengine.input.InputActions;
 import net.coffeebrewia.roastengine.input.InputAxis;
 import net.coffeebrewia.roastengine.input.InputButton;
+import net.coffeebrewia.roastengine.bypass.CheatMenu;
+import net.coffeebrewia.roastengine.bypass.Cheats;
 import net.coffeebrewia.roastengine.modding.LocalMod;
 import net.coffeebrewia.roastengine.multiplayer.ChatBox;
 import net.coffeebrewia.roastengine.multiplayer.MultiplayerSession;
@@ -171,6 +173,22 @@ public final class SandboxState implements GameState {
     private boolean chatting;
     private final Matrix4f viewProjection = new Matrix4f();
     private final Vector4f projected = new Vector4f();
+    private float autoChatTimer;
+    private int autoChatSent;
+    /** Cheats from an enabled Bypass API and hack client; inactive when there are none. */
+    private Cheats cheats;
+    private CheatMenu cheatMenu;
+    /** True while the cheat menu has the mouse, so the game ignores movement. */
+    private boolean cheatMenuOpen;
+    /** Where the body stays while the camera flies free. */
+    private final Vector3f freecamBody = new Vector3f();
+    /** Recent pings for the graph, four a second, oldest first once it wraps. */
+    private final int[] pingHistory = new int[60];
+    private int pingCursor;
+    private float pingSampleTimer;
+    private boolean freecamActive;
+    /** The spot saved by the "save this spot" cheat. */
+    private Vector3f savedSpot;
 
     public SandboxState(Engine engine, GameState returnState) {
         this(engine, returnState, null);
@@ -252,6 +270,12 @@ public final class SandboxState implements GameState {
         String startYaw = System.getProperty("roastengine.startYaw");
         if (startYaw != null) {
             camera.rotate((float) Math.toRadians(Float.parseFloat(startYaw)), 0f);
+        }
+        cheats = Cheats.load(engine.modManager());
+        cheatMenu = new CheatMenu(cheats);
+        if (cheats.isActive()) {
+            setNotice(cheats.apiName() + " active - press " + cheatKeyName() + " for cheats");
+            applyCheatDevAids();
         }
         engine.input().setCursorCaptured(true);
         // Dev aid: -PstartMenu=graphics opens the pause menu on a given page, for screenshots.
@@ -335,7 +359,16 @@ public final class SandboxState implements GameState {
             return; // disconnected, and already on the way back to the menu
         }
 
-        if (!chatting && actions.wasPressed(InputButton.PAUSE)) {
+        cheatMenuOpen = cheatMenu.update(input, !paused && !chatting);
+        if (cheatMenuOpen) {
+            // The menu is a normal mouse UI, so the mouse comes back while it is up.
+            if (input.isCursorCaptured()) {
+                input.setCursorCaptured(false);
+            }
+        } else if (!paused && !chatting) {
+            cheats.handleHotkeys(input);
+        }
+        if (!chatting && !cheatMenuOpen && actions.wasPressed(InputButton.PAUSE)) {
             if (!paused) {
                 pause();
             } else if (pauseMenu.back()) {
@@ -348,9 +381,14 @@ public final class SandboxState implements GameState {
         if (paused) {
             return;
         }
-        if (!input.isCursorCaptured()) {
+        if (!input.isCursorCaptured() && !cheatMenuOpen) {
             input.setCursorCaptured(true); // e.g. focus came back to the window
         }
+        if (cheatMenuOpen) {
+            return; // the menu is up: the world waits
+        }
+        camera.setFieldOfView(cheats.value("fov", engine.settings().fieldOfView));
+        handleCheatActions();
         // While taking an automated screenshot the camera is locked, so shots are reproducible.
         if (!chatting && System.getProperty("roastengine.autoScreenshot") == null) {
             float sensitivity = MOUSE_SENSITIVITY * engine.settings().mouseSensitivity;
@@ -358,8 +396,9 @@ public final class SandboxState implements GameState {
                     actions.axis(InputAxis.LOOK_Y) * sensitivity);
         }
 
-        float forward = chatting ? 0f : actions.axis(InputAxis.MOVE_Y);
-        float right = chatting ? 0f : actions.axis(InputAxis.MOVE_X);
+        boolean typing = chatting;
+        float forward = typing ? 0f : actions.axis(InputAxis.MOVE_Y);
+        float right = typing ? 0f : actions.axis(InputAxis.MOVE_X);
         // Dev aid: -PautoWalk=<seconds> holds "forward" so movement can be tested without hands.
         if (autoWalkSeconds > 0f) {
             autoWalkSeconds -= dt;
@@ -370,7 +409,17 @@ public final class SandboxState implements GameState {
             forward /= length;
             right /= length;
         }
-        float speed = WALK_SPEED * (actions.isDown(InputButton.SPRINT) ? SPRINT_MULTIPLIER : 1f);
+        boolean sprinting = cheats.on("infiniteSprint") || actions.isDown(InputButton.SPRINT);
+        float speed = WALK_SPEED * (sprinting ? SPRINT_MULTIPLIER : 1f) * cheats.value("speed", 1f);
+
+        // Flight and freecam replace walking entirely: no gravity, no collisions.
+        if (cheats.on("freecam") || cheats.on("fly") || cheats.on("noclip")) {
+            flyStep(dt, forward, right, typing);
+            return;
+        }
+        if (freecamActive) {
+            endFreecam();
+        }
 
         // Walking follows the look direction, but never tilts with the pitch.
         float sin = (float) Math.sin(camera.yaw());
@@ -393,8 +442,8 @@ public final class SandboxState implements GameState {
         float dx = velocityX * dt;
         float dz = velocityZ * dt;
 
-        if (onGround && !chatting && actions.wasPressed(InputButton.JUMP)) {
-            verticalVelocity = JUMP_VELOCITY;
+        if (onGround && !typing && actions.wasPressed(InputButton.JUMP)) {
+            verticalVelocity = JUMP_VELOCITY * cheats.value("jump", 1f);
             onGround = false;
         }
         verticalVelocity += GRAVITY * dt;
@@ -444,6 +493,7 @@ public final class SandboxState implements GameState {
                 interactions.interact(interactionTarget);
             }
         }
+        interactions.setInstantDoors(cheats.on("instantDoors"));
         interactions.update(world, dt, interactHeld && passOutTimer <= 0f);
         npcs.update(dt, camera.position());
         if (npcs.consumeLiftOff()) {
@@ -461,10 +511,142 @@ public final class SandboxState implements GameState {
             }
         }
 
-        if (camera.position().y < FALL_RESPAWN_Y) {
+        if (camera.position().y < FALL_RESPAWN_Y && !cheats.on("noFall")) {
             respawn("You fell out of the world");
         }
-        checkKillVolumes();
+        if (!cheats.on("noFall")) {
+            checkKillVolumes();
+        }
+    }
+
+    /**
+     * Flying, and the freecam - which is the same thing with the body left behind. Movement
+     * follows where you look, and Space/Shift go straight up and down.
+     */
+    private void flyStep(float dt, float forward, float right, boolean typing) {
+        if (cheats.on("freecam") && !freecamActive) {
+            freecamActive = true;
+            freecamBody.set(camera.position());
+        } else if (!cheats.on("freecam") && freecamActive) {
+            endFreecam();
+        }
+        InputActions actions = engine.actions();
+        float speed = cheats.value("flySpeed", 8f) * cheats.value("speed", 1f) * dt
+                * (actions.isDown(InputButton.SPRINT) ? 2.5f : 1f);
+        camera.moveHorizontal(forward * speed, right * speed);
+        float up = 0f;
+        if (!typing && actions.isDown(InputButton.JUMP)) {
+            up = 1f;
+        } else if (!typing && engine.input().isKeyDown(GLFW_KEY_LEFT_SHIFT)) {
+            up = -1f;
+        }
+        camera.moveVertical(up * speed);
+
+        velocityX = 0f;
+        velocityZ = 0f;
+        verticalVelocity = 0f;
+        onGround = false;
+        onIce = false;
+        moving = !typing && (forward != 0f || right != 0f || up != 0f);
+        walkPhase = moving ? (walkPhase + dt * 6f) % (float) (Math.PI * 2) : 0f;
+        interactionTarget = interactions.findTarget(world, camera);
+        interactions.setInstantDoors(cheats.on("instantDoors"));
+        interactions.update(world, dt, false);
+        npcs.update(dt, freecamActive ? freecamBody : camera.position());
+        updateDrunkenness(dt);
+    }
+
+    /**
+     * Where the player is looking: the first solid surface within {@code maxDistance}, or the
+     * ground. Walks along the view ray in small steps and stops at the first box it is inside,
+     * which is plenty for a teleport.
+     */
+    private Vector3f lookingAt(float maxDistance) {
+        Vector3f point = new Vector3f(camera.position());
+        Vector3f step = camera.forward(new Vector3f()).mul(0.25f);
+        Vector3f probeMin = new Vector3f();
+        Vector3f probeMax = new Vector3f();
+        for (float travelled = 0; travelled < maxDistance; travelled += 0.25f) {
+            point.add(step);
+            if (point.y <= GROUND_LEVEL && world.hasGroundPlatform()) {
+                return new Vector3f(point.x, GROUND_LEVEL, point.z);
+            }
+            probeMin.set(point).sub(0.05f, 0.05f, 0.05f);
+            probeMax.set(point).add(0.05f, 0.05f, 0.05f);
+            for (WorldObject object : world.objects()) {
+                if (!object.collision) {
+                    continue;
+                }
+                for (WorldObject.Box box : object.boxes) {
+                    if (box.min().x < probeMax.x && box.max().x > probeMin.x
+                            && box.min().y < probeMax.y && box.max().y > probeMin.y
+                            && box.min().z < probeMax.z && box.max().z > probeMin.z) {
+                        // Stand on top of what was hit, and a step back out of it.
+                        return new Vector3f(point.x - step.x, box.max().y, point.z - step.z);
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Puts the player back where their body was left standing. */
+    private void endFreecam() {
+        freecamActive = false;
+        camera.position().set(freecamBody);
+        verticalVelocity = 0f;
+        unstick();
+    }
+
+    /**
+     * Dev aids for testing cheats without hands: {@code -PautoCheats=fly,fov=110} switches those
+     * on (or sets them), and {@code -PopenCheatMenu} starts with the menu up.
+     */
+    private void applyCheatDevAids() {
+        String list = System.getProperty("roastengine.autoCheats");
+        if (list != null) {
+            for (String entry : list.split(",")) {
+                String[] parts = entry.trim().split("=", 2);
+                if (!parts[0].isEmpty()) {
+                    cheats.set(parts[0].trim(), parts.length > 1 ? Float.parseFloat(parts[1].trim()) : 1f);
+                }
+            }
+        }
+        if (System.getProperty("roastengine.openCheatMenu") != null) {
+            cheatMenu.open();
+        }
+    }
+
+    /** The one-shot cheats: teleports and saved spots. */
+    private void handleCheatActions() {
+        if (cheats.consume("teleportToLook")) {
+            Vector3f target = lookingAt(120f);
+            if (target != null) {
+                camera.position().set(target.x, target.y + EYE_HEIGHT, target.z);
+                verticalVelocity = 0f;
+                unstick();
+                setNotice("Teleported");
+            } else {
+                setNotice("Nothing to teleport to - look at something closer");
+            }
+        }
+        if (cheats.consume("saveSpot")) {
+            savedSpot = new Vector3f(camera.position());
+            setNotice("Spot saved");
+        }
+        if (cheats.consume("loadSpot")) {
+            if (savedSpot == null) {
+                setNotice("No spot saved yet");
+            } else {
+                camera.position().set(savedSpot);
+                verticalVelocity = 0f;
+                setNotice("Back to the saved spot");
+            }
+        }
+    }
+
+    private String cheatKeyName() {
+        return cheats.menuKeyName();
     }
 
     /**
@@ -480,10 +662,29 @@ public final class SandboxState implements GameState {
                     ? menu.withMessage(reason, true) : returnState);
             return false;
         }
-        online.update(dt, camera.position(), camera.yaw(), camera.pitch(),
-                moving && passOutTimer <= 0f, STEPS_PER_METRE);
+        // In freecam the body stays put, so that is what the server hears about.
+        online.update(dt, freecamActive ? freecamBody : camera.position(), camera.yaw(), camera.pitch(),
+                moving && passOutTimer <= 0f && !freecamActive, STEPS_PER_METRE);
+        autoChat(dt);
         chatting = chatBox.update(engine.input(), dt, !paused, online::sendChat);
         return true;
+    }
+
+    /**
+     * Dev aid: -PautoChat="hi|/msg~Ann~psst" sends those lines, a couple of seconds apart. A {@code ~}
+     * stands for a space, since launch scripts split settings on spaces.
+     */
+    private void autoChat(float dt) {
+        String script = System.getProperty("roastengine.autoChat");
+        if (script == null) {
+            return;
+        }
+        autoChatTimer += dt;
+        String[] lines = script.split("\\|");
+        int due = (int) ((autoChatTimer - 4f) / 2.5f); // start 4 s in, one line every 2.5 s
+        while (autoChatSent <= due && autoChatSent < lines.length) {
+            online.sendChat(lines[autoChatSent++].replace('~', ' ').trim());
+        }
     }
 
     /**
@@ -835,6 +1036,20 @@ public final class SandboxState implements GameState {
     // Render
     // ---------------------------------------------------------------------
 
+    /**
+     * Where the camera draws from: behind the shoulder in third person, and wherever the freecam
+     * has flown to. Returns the offset applied, so it can be taken off again afterwards.
+     */
+    private Vector3f applyViewCheats(Vector3f scratch) {
+        scratch.zero();
+        if (cheats.on("thirdPerson") && !freecamActive) {
+            camera.forward(scratch).mul(-3.2f * SCALE);
+            scratch.y += 0.4f * SCALE;
+            camera.position().add(scratch);
+        }
+        return scratch;
+    }
+
     @Override
     public void render() {
         boolean shaders = post.isActive();
@@ -846,6 +1061,7 @@ public final class SandboxState implements GameState {
         glEnable(GL_DEPTH_TEST);
         glDisable(GL_BLEND);
 
+        Vector3f viewOffset = applyViewCheats(new Vector3f());
         shader.bind();
         shader.setUniform("uProjection", camera.projectionMatrix(engine.window().aspectRatio()));
         shader.setUniform("uView", camera.viewMatrix());
@@ -896,8 +1112,16 @@ public final class SandboxState implements GameState {
         npcs.renderStatic(shader);
 
         // The player's own body and hands, drawn last so they sit on top of the world.
-        playerModel.renderBody(shader, camera, EYE_HEIGHT, walkPhase, moving);
-        playerModel.renderHands(shader, camera, walkPhase, moving);
+        boolean ownBodyFromOutside = freecamActive || cheats.on("thirdPerson");
+        if (ownBodyFromOutside) {
+            if (!playerModel.isAnimated()) {
+                playerModel.renderOther(shader, freecamActive ? freecamBody : bodyPosition(viewOffset),
+                        camera.yaw(), EYE_HEIGHT, walkPhase, moving);
+            }
+        } else {
+            playerModel.renderBody(shader, camera, EYE_HEIGHT, walkPhase, moving);
+            playerModel.renderHands(shader, camera, walkPhase, moving);
+        }
         if (online != null && !playerModel.isAnimated()) {
             for (RemotePlayer other : online.others()) {
                 if (other.isPlaced()) {
@@ -920,7 +1144,13 @@ public final class SandboxState implements GameState {
             skinnedShader.setUniform("uGrid", 0);
             skinnedShader.setUniform("uEmissiveStrength", shaders ? 1f : 0.35f);
             if (playerModel.isAnimated() && passOutTimer <= 0f) {
-                playerModel.renderAnimatedBody(skinnedShader, camera, EYE_HEIGHT, lastDelta, moving);
+                if (ownBodyFromOutside) {
+                    playerModel.renderOtherAnimated(skinnedShader,
+                            freecamActive ? freecamBody : bodyPosition(viewOffset), camera.yaw(),
+                            EYE_HEIGHT, clock, moving);
+                } else {
+                    playerModel.renderAnimatedBody(skinnedShader, camera, EYE_HEIGHT, lastDelta, moving);
+                }
             }
             if (online != null && playerModel.isAnimated()) {
                 for (RemotePlayer other : online.others()) {
@@ -941,6 +1171,12 @@ public final class SandboxState implements GameState {
                     java.util.Map.of("uDrunk", drunk));
         }
         drawHud();
+        camera.position().sub(viewOffset);
+    }
+
+    /** The player's actual eyes, with any third-person camera offset taken back off. */
+    private Vector3f bodyPosition(Vector3f viewOffset) {
+        return new Vector3f(camera.position()).sub(viewOffset);
     }
 
     /**
@@ -952,6 +1188,10 @@ public final class SandboxState implements GameState {
             wakeTimer = Math.max(0f, wakeTimer - dt);
         }
         int sips = interactions.totalSips();
+        if (cheats.on("neverPassOut")) {
+            engine.audio().setMusicPitch(1f);
+            return; // sober however much you drink
+        }
         float drunk = Math.min(1f, sips / (float) Math.max(1, sipsToPassOut));
         if (drunk > 0.25f) {
             drunkTime += dt;
@@ -1053,7 +1293,7 @@ public final class SandboxState implements GameState {
         shadowedText(r, status, 12, 12, 1.5f, hudText, hudShadow);
         String hints = "WASD walk  |  Mouse look  |  Space jump  |  Shift/Ctrl sprint  |  E interact  |  Esc menu";
         if (online != null) {
-            hints += "  |  T chat  |  Tab players";
+            hints += "  |  T chat (/help)  |  Tab players";
             drawOnlineHud(r, w, h, hudText, hudShadow);
         }
         if (engine.actions().hasSchemes() && engine.gamepads().anyConnected()) {
@@ -1097,8 +1337,14 @@ public final class SandboxState implements GameState {
             r.rect(w / 2f - 8, h / 2f - 1, 16, 2, Color.rgb(0xFFFFFF).withAlpha(0.8f));
             r.rect(w / 2f - 1, h / 2f - 8, 2, 16, Color.rgb(0xFFFFFF).withAlpha(0.8f));
         }
+        drawCheatInfo(r, w, h, hudText, hudShadow);
         r.end();
 
+        if (cheatMenu.isOpen()) {
+            engine.ui().begin(lastDelta);
+            cheatMenu.draw(engine.ui(), r, w, h);
+            engine.ui().end();
+        }
         if (paused) {
             drawPauseMenu(w, h);
         }
@@ -1107,8 +1353,10 @@ public final class SandboxState implements GameState {
     /** Name tags over the other players, the chat, the server line and, while Tab is held, the list. */
     private void drawOnlineHud(Renderer2D r, float w, float h, Color text, Color shadow) {
         viewProjection.set(camera.projectionMatrix(engine.window().aspectRatio())).mul(camera.viewMatrix());
+        boolean esp = cheats.on("playerEsp");
         for (RemotePlayer other : online.others()) {
-            if (!other.isPlaced() || other.eye.distance(camera.position()) > NAME_TAG_RANGE) {
+            float distance = other.eye.distance(camera.position());
+            if (!other.isPlaced() || (!esp && distance > NAME_TAG_RANGE)) {
                 continue;
             }
             projected.set(other.eye.x, other.eye.y + 0.45f * SCALE, other.eye.z, 1f).mul(viewProjection);
@@ -1117,9 +1365,14 @@ public final class SandboxState implements GameState {
             }
             float sx = (projected.x / projected.w * 0.5f + 0.5f) * w;
             float sy = (0.5f - projected.y / projected.w * 0.5f) * h;
-            float tw = r.textWidth(other.name, 1.5f);
+            if (esp) {
+                drawEspBox(r, other, sx, distance, w, h);
+            }
+            String tagged = other.taggedName();
+            float tw = r.textWidth(tagged, 1.5f);
             r.rect(sx - tw / 2f - 5, sy - 4, tw + 10, 20, Color.rgb(0x000000).withAlpha(0.45f));
-            r.text(other.name, sx - tw / 2f, sy, 1.5f, text);
+            r.text(tagged, sx - tw / 2f, sy, 1.5f, other.rank > net.coffeebrewia.roastengine.net.Protocol.RANK_NORMAL
+                    ? Color.rgb(0xF2C46B) : text);
         }
 
         int ping = online.pingMillis();
@@ -1131,8 +1384,13 @@ public final class SandboxState implements GameState {
 
         if (!chatting && !paused && engine.input().isKeyDown(GLFW_KEY_TAB)) {
             List<String> names = new ArrayList<>();
-            names.add(online.myName() + " (you)");
-            online.others().stream().map(other -> other.name).sorted(String.CASE_INSENSITIVE_ORDER)
+            String myTag = net.coffeebrewia.roastengine.net.Protocol.rankTag(online.myRank());
+            names.add((myTag.isEmpty() ? "" : myTag + " ") + online.myName() + " (you)");
+            // Staff first, then everyone else by name.
+            online.others().stream()
+                    .sorted(java.util.Comparator.comparingInt((RemotePlayer other) -> -other.rank)
+                            .thenComparing(other -> other.name, String.CASE_INSENSITIVE_ORDER))
+                    .map(RemotePlayer::taggedName)
                     .forEach(names::add);
             float bw = 320;
             float bh = 52 + names.size() * 22;
@@ -1149,10 +1407,89 @@ public final class SandboxState implements GameState {
         }
     }
 
+    /**
+     * A box around a player and how far away they are. The name tag is already drawn over
+     * everything, so this only adds the outline and the distance.
+     *
+     * <p>The top and bottom come from projecting their head and feet, so the box is the size they
+     * really are on screen however close they stand.
+     */
+    private void drawEspBox(Renderer2D r, RemotePlayer other, float sx, float distance, float w, float h) {
+        float headY = screenY(other.eye.x, other.eye.y + 0.2f * SCALE, other.eye.z, h);
+        float feetY = screenY(other.eye.x, other.eye.y - EYE_HEIGHT, other.eye.z, h);
+        if (Float.isNaN(headY) || Float.isNaN(feetY)) {
+            return; // behind the camera
+        }
+        float top = Math.min(headY, feetY);
+        float height = Math.abs(feetY - headY);
+        float width = Math.max(8f, height * 0.42f);
+        Color color = Color.rgb(0xF2C46B).withAlpha(0.8f);
+        r.rect(sx - width / 2f, top, width, 1.5f, color);
+        r.rect(sx - width / 2f, top + height, width, 1.5f, color);
+        r.rect(sx - width / 2f, top, 1.5f, height, color);
+        r.rect(sx + width / 2f, top, 1.5f, height, color);
+        String far = Math.round(distance) + "m";
+        r.text(far, sx - r.textWidth(far, 1.25f) / 2f, Math.min(h - 18, top + height + 4), 1.25f, color);
+    }
+
+    /** A world point's height on screen, or NaN when it is behind the camera. */
+    private float screenY(float x, float y, float z, float windowHeight) {
+        projected.set(x, y, z, 1f).mul(viewProjection);
+        return projected.w < 0.05f ? Float.NaN : (0.5f - projected.y / projected.w * 0.5f) * windowHeight;
+    }
+
     private static void shadowedText(Renderer2D r, String text, float x, float y, float scale,
                                      Color color, Color shadow) {
         r.text(text, x + 1, y + 1, scale, shadow);
         r.text(text, x, y, scale, color);
+    }
+
+    /** The Info tab's readouts, and a reminder of which cheats are on. */
+    private void drawCheatInfo(Renderer2D r, float w, float h, Color text, Color shadow) {
+        if (!cheats.isActive()) {
+            return;
+        }
+        float y = 60;
+        if (cheats.on("showInfo")) {
+            Vector3f p = camera.position();
+            float speed = (float) Math.hypot(velocityX, velocityZ);
+            shadowedText(r, String.format("xyz %.2f %.2f %.2f", p.x, p.y, p.z), 12, y, 1.5f, text, shadow);
+            shadowedText(r, String.format("speed %.1f m/s   |   %.1f ms/frame   |   %.0f FPS",
+                    speed, lastDelta * 1000f, engine.fps()), 12, y + 18, 1.5f, text, shadow);
+            y += 44;
+        }
+        if (cheats.on("showPing") && online != null) {
+            int ping = online.pingMillis();
+            pingSampleTimer += lastDelta;
+            if (pingSampleTimer >= 0.25f) {
+                pingSampleTimer = 0f;
+                pingCursor = (pingCursor + 1) % pingHistory.length;
+                pingHistory[pingCursor] = Math.max(0, ping);
+            }
+            shadowedText(r, "ping " + (ping < 0 ? "?" : ping + " ms"), 12, y, 1.5f, text, shadow);
+            float graphX = 12;
+            float graphY = y + 20;
+            r.rect(graphX, graphY, pingHistory.length * 3f, 40, Color.rgb(0x000000).withAlpha(0.35f));
+            for (int i = 0; i < pingHistory.length; i++) {
+                int sample = pingHistory[(pingCursor + 1 + i) % pingHistory.length];
+                float bar = Math.min(40f, sample * 0.2f);
+                r.rect(graphX + i * 3f, graphY + 40 - bar, 2f, bar,
+                        sample > 150 ? Theme.ERROR : Theme.SUCCESS);
+            }
+            y += 68;
+        }
+        // Which cheats are on, so nothing is left running by accident.
+        StringBuilder active = new StringBuilder();
+        for (net.coffeebrewia.roastengine.bypass.Cheat cheat : net.coffeebrewia.roastengine.bypass.Cheat.ALL) {
+            if (cheat.kind() == net.coffeebrewia.roastengine.bypass.Cheat.Kind.TOGGLE && cheats.on(cheat.id())
+                    && !cheat.id().startsWith("show")) {
+                active.append(active.isEmpty() ? "" : ", ").append(cheat.label());
+            }
+        }
+        if (!active.isEmpty()) {
+            String line = "Cheats: " + active;
+            shadowedText(r, r.ellipsize(line, w - 24, 1.25f), 12, y, 1.25f, Theme.ACCENT, shadow);
+        }
     }
 
     private void drawPauseMenu(float w, float h) {
