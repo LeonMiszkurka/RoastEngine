@@ -624,6 +624,174 @@ def draw_xbox(w, h, wordmark=True):
 # Header strips: the wordmark alone, like branding/roastengine-header-400x100.png
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Bypass API
+# ---------------------------------------------------------------------------
+
+CYAN = (86, 214, 255)
+CYAN_DIM = (30, 98, 132)
+WALL = (34, 38, 46)
+WALL_DARK = (22, 25, 31)
+
+
+def draw_bypass(w, h, wordmark=True):
+    """A beam going straight through a solid wall: what the API lets a hack client do."""
+    unit = min(w, h)
+    base = vertical_gradient(w, h, (18, 26, 34), (6, 8, 12))
+    lit = radial_falloff(w, h, w / 2, h * 0.42, unit * 0.85)
+    base = Image.fromarray(
+        np.clip(np.asarray(base, float) + lit[:, :, None] * np.array([8, 28, 40], float), 0, 255)
+        .astype(np.uint8), "RGB")
+    emissive = Image.new("RGB", (w, h), (0, 0, 0))
+    bd, ed = ImageDraw.Draw(base), ImageDraw.Draw(emissive)
+
+    cx, cy = w / 2, h * 0.44
+    wall_half = unit * 0.075
+    wall_top = cy - unit * 0.30
+    wall_bottom = cy + unit * 0.30
+
+    # The wall, with a lit edge facing the beam so it reads as solid.
+    bd.rectangle((cx - wall_half, wall_top, cx + wall_half, wall_bottom), fill=WALL)
+    bd.rectangle((cx - wall_half, wall_top, cx - wall_half + unit * 0.014, wall_bottom), fill=WALL_DARK)
+    for i in range(6):
+        # Brick courses: a wall that is clearly a wall at icon size.
+        y = wall_top + (i + 1) * (wall_bottom - wall_top) / 7
+        bd.line((cx - wall_half, y, cx + wall_half, y), fill=WALL_DARK, width=max(1, int(unit * 0.006)))
+
+    # The beam: solid outside the wall, dimmed where it passes through it.
+    beam_h = unit * 0.030
+    dash = unit * 0.055
+    x = cx - unit * 0.40
+    while x < cx + unit * 0.40:
+        inside = cx - wall_half < x < cx + wall_half
+        colour = tuple(int(c * (0.35 if inside else 1.0)) for c in CYAN)
+        box = (x, cy - beam_h / 2, min(x + dash * 0.62, cx + unit * 0.40), cy + beam_h / 2)
+        bd.rounded_rectangle(box, radius=beam_h / 2, fill=colour)
+        ed.rounded_rectangle(box, radius=beam_h / 2, fill=colour)
+        x += dash
+
+    # An arrowhead on the far side: it got through.
+    tip = cx + unit * 0.42
+    head = [(tip, cy), (tip - unit * 0.075, cy - unit * 0.062), (tip - unit * 0.075, cy + unit * 0.062)]
+    bd.polygon(head, fill=CYAN)
+    ed.polygon(head, fill=CYAN)
+
+    # Where the beam meets the wall, a bright entry point.
+    for side in (-1, 1):
+        px = cx + side * wall_half
+        bd.ellipse((px - beam_h, cy - beam_h, px + beam_h, cy + beam_h), fill=CYAN)
+        ed.ellipse((px - beam_h, cy - beam_h, px + beam_h, cy + beam_h), fill=CYAN)
+
+    art = finish(base, emissive, unit, bloom_strength=0.95, vignette_strength=0.55, seed=61)
+
+    if wordmark:
+        d = ImageDraw.Draw(art)
+        title = font(unit * 0.098, FONT_CONDENSED_BLACK)
+        kicker = font(unit * 0.034)
+        tracking = unit * 0.020
+        title_y = h * 0.875
+        tracked_text(d, cx, h * 0.810, "ROASTENGINE", kicker, (150, 168, 178), unit * 0.024)
+        tracked_text(d, cx, title_y, "BYPASS API", title, (238, 248, 255), tracking)
+        rule_half = tracked_width(d, "BYPASS API", title, tracking) / 2
+        rule_y = title_y + unit * 0.058
+        d.line((cx - rule_half, rule_y, cx + rule_half, rule_y), fill=CYAN_DIM, width=max(1, int(unit * 0.005)))
+
+    rounded_border(
+        ImageDraw.Draw(art), w, h,
+        inset=unit * 0.022, radius=unit * 0.075, color=CYAN_DIM, width=max(1, int(unit * 0.008)),
+    )
+    return art
+
+
+# ---------------------------------------------------------------------------
+# Roast Hack (runs on the Bypass API)
+# ---------------------------------------------------------------------------
+
+VIOLET = (176, 128, 255)
+VIOLET_DIM = (84, 54, 138)
+PANEL = (28, 24, 38)
+
+
+def draw_hack(w, h, wordmark=True):
+    """The menu, over a player boxed by the ESP - the two things the client is for."""
+    unit = min(w, h)
+    base = vertical_gradient(w, h, (26, 20, 36), (7, 6, 11))
+    lit = radial_falloff(w, h, w * 0.62, h * 0.40, unit * 0.85)
+    base = Image.fromarray(
+        np.clip(np.asarray(base, float) + lit[:, :, None] * np.array([26, 12, 42], float), 0, 255)
+        .astype(np.uint8), "RGB")
+    emissive = Image.new("RGB", (w, h), (0, 0, 0))
+    bd, ed = ImageDraw.Draw(base), ImageDraw.Draw(emissive)
+
+    # Behind everything: a player, seen through the wall, with the ESP box around them.
+    figure_x = w * 0.255
+    figure_base = h * 0.66
+    figure_h = unit * 0.40
+    person(bd, figure_x, figure_base, figure_h, (16, 13, 24))
+    box = (figure_x - figure_h * 0.30, figure_base - figure_h * 1.06,
+           figure_x + figure_h * 0.30, figure_base + figure_h * 0.04)
+    line_w = max(2, int(unit * 0.008))
+    bd.rectangle(box, outline=VIOLET, width=line_w)
+    ed.rectangle(box, outline=VIOLET, width=line_w)
+
+    # The menu itself: a header and a few rows, one switch on.
+    panel = (w * 0.42, h * 0.20, w * 0.80, h * 0.70)
+    radius = unit * 0.035
+    bd.rounded_rectangle(panel, radius=radius, fill=PANEL)
+    bd.rounded_rectangle(panel, radius=radius, outline=VIOLET, width=line_w)
+    ed.rounded_rectangle(panel, radius=radius, outline=tuple(int(c * 0.85) for c in VIOLET), width=line_w)
+
+    header_y = panel[1] + unit * 0.075
+    bd.line((panel[0] + unit * 0.045, header_y, panel[2] - unit * 0.045, header_y),
+            fill=VIOLET_DIM, width=max(1, int(unit * 0.006)))
+    bd.rounded_rectangle((panel[0] + unit * 0.045, panel[1] + unit * 0.030,
+                          panel[0] + unit * 0.150, panel[1] + unit * 0.052),
+                         radius=unit * 0.011, fill=VIOLET)
+    ed.rounded_rectangle((panel[0] + unit * 0.045, panel[1] + unit * 0.030,
+                          panel[0] + unit * 0.150, panel[1] + unit * 0.052),
+                         radius=unit * 0.011, fill=VIOLET)
+
+    rows = 4
+    row_gap = (panel[3] - header_y - unit * 0.060) / rows
+    for row in range(rows):
+        y = header_y + row_gap * (row + 0.6)
+        bd.rounded_rectangle((panel[0] + unit * 0.045, y - unit * 0.016,
+                              panel[0] + unit * 0.185, y + unit * 0.016),
+                             radius=unit * 0.012, fill=(52, 44, 70))
+        # The switch: the first two are on and glow, the rest are off.
+        on = row < 2
+        sx = panel[2] - unit * 0.105
+        track = (sx, y - unit * 0.020, sx + unit * 0.065, y + unit * 0.020)
+        bd.rounded_rectangle(track, radius=unit * 0.020, fill=VIOLET if on else (46, 40, 60))
+        if on:
+            ed.rounded_rectangle(track, radius=unit * 0.020, fill=VIOLET)
+        knob_x = track[2] - unit * 0.018 if on else track[0] + unit * 0.018
+        bd.ellipse((knob_x - unit * 0.015, y - unit * 0.015,
+                    knob_x + unit * 0.015, y + unit * 0.015), fill=(246, 242, 255))
+
+    art = finish(base, emissive, unit, bloom_strength=0.85, vignette_strength=0.55, seed=67)
+
+    if wordmark:
+        d = ImageDraw.Draw(art)
+        title = font(unit * 0.100, FONT_CONDENSED_BLACK)
+        kicker = font(unit * 0.034)
+        tracking = unit * 0.020
+        cx = w / 2
+        title_y = h * 0.875
+        tracked_text(d, cx, h * 0.810, "NEEDS THE BYPASS API", kicker, (162, 146, 180), unit * 0.022)
+        tracked_text(d, cx, title_y, "ROAST HACK", title, (246, 240, 255), tracking)
+        rule_half = tracked_width(d, "ROAST HACK", title, tracking) / 2
+        rule_y = title_y + unit * 0.058
+        d.line((cx - rule_half, rule_y, cx + rule_half, rule_y), fill=VIOLET_DIM,
+               width=max(1, int(unit * 0.005)))
+
+    rounded_border(
+        ImageDraw.Draw(art), w, h,
+        inset=unit * 0.022, radius=unit * 0.075, color=VIOLET_DIM, width=max(1, int(unit * 0.008)),
+    )
+    return art
+
+
 def draw_header(w, h, title, kicker, accent, accent_dim, glow, seed):
     unit = h
     base = vertical_gradient(w, h, (20, 15, 22), (5, 3, 7))
@@ -689,6 +857,10 @@ MODS = [
      WIRE_DIM, (46, 24, 8), 53, ["packs/inputedit-api", "mods/inputedit-api"]),
     (draw_xbox, "xbox-controller", "XBOX CONTROLLER", "RUNS ON THE INPUTEDIT API", GREEN, GREEN_DIM,
      (10, 40, 16), 43, ["packs/xbox-controller", "mods/xbox-controller"]),
+    (draw_bypass, "bypass-api", "BYPASS API", "FOR ROASTENGINE", CYAN, CYAN_DIM, (8, 34, 48), 61,
+     ["packs/bypass-api", "mods/bypass-api"]),
+    (draw_hack, "roast-hack", "ROAST HACK", "NEEDS THE BYPASS API", VIOLET, VIOLET_DIM, (34, 14, 52), 67,
+     ["packs/roast-hack", "mods/roast-hack"]),
 ]
 
 

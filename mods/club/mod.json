@@ -1,8 +1,0 @@
-{
-  "name": "The Club",
-  "nameId": "the-club",
-  "version": "1.0.0",
-  "type": "world",
-  "engine": "RoastEngine 0.1",
-  "description": "A hallway, a door to open, a club full of people, and drinks you can sip."
-}

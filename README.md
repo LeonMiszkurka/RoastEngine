@@ -300,6 +300,25 @@ Both mods live in [packs/](packs/); `./gradlew packMods` zips everything there i
 word about where they are, so others see you fly. Dev aids: `-PautoCheats=fly,fov=110` and
 `-PopenCheatMenu`.
 
+## VR (the VR API)
+
+The game can run in a headset: **Meta Quest 2 over Link or Air Link**, or any SteamVR headset, on
+a **Windows or Linux PC**. Both controllers are tracked and become the hands in the game; the left
+stick walks, the right stick turns in steps, the right trigger punches.
+
+```
+vr/      VrSystem (OpenXR session, one texture chain per eye, the frame loop)
+         VrInput (Touch controllers as actions, both hand poses)
+         GraphicsBinding (handing OpenXR the game's own OpenGL context)
+packs/vr-api             the API mod that unlocks it
+packs/quest2-controller  Touch controllers for the flat game, through InputEdit
+```
+
+VR starts only with `-Pvr` (or `Play in VR.bat` in the Windows build) **and** the VR API mod
+switched on. Without a runtime or a headset the game runs flat and says why in the log.
+**macOS cannot do VR**: there is no OpenXR runtime for it, so the Mac build never enters VR.
+Full setup: [release/VR.md](release/VR.md).
+
 ## External mods (installing a zip)
 
 **Install Mod from File...** on the main menu installs any mod zip that never went through
@@ -566,6 +585,31 @@ The log names any material it finds without one:
 That zip is what you upload as a mod file on mod.io.
 
 Models are imported with Assimp. There is no lighting model yet, so a fixed directional light is baked into the vertex colours at import time and multiplied with the texture in the shader.
+
+## Rigs and hands
+
+Bought rigs are usually modelled with the hands closed into a fist. That is fine for a render
+and miserable to animate: every pose starts with undoing 60-85 degrees of curl at each knuckle,
+and straight fingers are the hardest thing to hit by hand. `tools/straighten_fingers.py` opens
+the hands out and makes that the rig's rest pose, so fingers start straight and you only pose
+what you actually mean to move:
+
+```bash
+/Applications/Blender.app/Contents/MacOS/Blender --background "My Rig.blend" \
+    --python tools/straighten_fingers.py -- --renders blender-out
+```
+
+| Flag | What it does |
+|---|---|
+| `--out` | where to save; the default is the original name plus ` (straight hands)` |
+| `--curl` | degrees of bend to leave at each joint - `0` is flat, `8-12` reads as relaxed |
+| `--glb` | also export the character to a `.glb` |
+| `--renders` | a folder for before/after pictures of the left hand |
+
+The original file is never written over. Two things are worth knowing about what it does: the
+deformation is baked into the meshes before the rest pose moves (otherwise the character springs
+back to a fist), and any action already on the rig is dropped, because its rotations are stored
+against the old rest pose and would be laid back on top of the new one.
 
 ## Artwork
 

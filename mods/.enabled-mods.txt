@@ -1,3 +1,5 @@
+bypass-api
 inputedit-api
+roast-hack
 roastengine-shader-api
-xbox-controller
+xbox-input-for-roastengine

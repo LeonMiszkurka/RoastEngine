@@ -1,0 +1,114 @@
+{
+  "name": "main",
+  "skyColor": [
+    0.53,
+    0.78,
+    0.95
+  ],
+  "music": "",
+  "groundPlatform": true,
+  "objects": [
+    {
+      "id": "b0ede54a-4c46-4a61-a135-c3e2d87a078a",
+      "name": "player",
+      "asset": "player.glb",
+      "position": {
+        "x": 3.23,
+        "y": 0.0,
+        "z": 8.0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "interaction": "",
+      "fill": 1.0,
+      "npc": "",
+      "entity": true,
+      "label": "",
+      "script": "",
+      "scriptParams": {},
+      "scriptEvents": [],
+      "animation": {
+        "type": "none",
+        "speed": 45.0,
+        "amount": 1.0,
+        "axis": "y",
+        "delay": 0.0
+      }
+    },
+    {
+      "id": "2d45b8be-9a6a-4100-b2c6-13985eda8af9",
+      "name": "player",
+      "asset": "player.glb",
+      "position": {
+        "x": -0.2,
+        "y": 0.0,
+        "z": 7.13
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "interaction": "",
+      "fill": 1.0,
+      "npc": "",
+      "entity": true,
+      "label": "",
+      "script": "",
+      "scriptParams": {},
+      "scriptEvents": [],
+      "animation": {
+        "type": "none",
+        "speed": 45.0,
+        "amount": 1.0,
+        "axis": "y",
+        "delay": 0.0
+      }
+    },
+    {
+      "id": "47448d41-3b89-49cf-96bf-79341acde46c",
+      "name": "player",
+      "asset": "player.glb",
+      "position": {
+        "x": 1.94,
+        "y": 0.0,
+        "z": 10.39
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "interaction": "",
+      "fill": 1.0,
+      "npc": "",
+      "entity": true,
+      "label": "",
+      "script": "",
+      "scriptParams": {},
+      "scriptEvents": [],
+      "animation": {
+        "type": "none",
+        "speed": 45.0,
+        "amount": 1.0,
+        "axis": "y",
+        "delay": 0.0
+      }
+    }
+  ]
+}

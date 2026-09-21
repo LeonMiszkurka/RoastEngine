@@ -69,6 +69,20 @@ public final class PlayerModel {
     /** Animation files loaded alongside the player model, one clip each. */
     private static final String IDLE_FILE = "player_idle.glb";
     private static final String WALK_FILE = "player_walk.glb";
+    /** Optional: played once when the player throws a punch. */
+    private static final String PUNCH_FILE = "player_punch.glb";
+    /**
+     * Which slice of player_punch.glb is the punch, in seconds, and how long it lasts.
+     *
+     * <p>Exporters often write the whole scene timeline into the file rather than just the swing,
+     * so the punch may sit anywhere inside a much longer clip. These play the part that matters at
+     * its real speed: {@code -PpunchStart=3.5 -PpunchSeconds=0.9}. With a file that holds only the
+     * punch, the defaults play it from the beginning.
+     */
+    private static final float PUNCH_START =
+            Float.parseFloat(System.getProperty("roastengine.punchStart", "0"));
+    private static final float PUNCH_SECONDS =
+            Float.parseFloat(System.getProperty("roastengine.punchSeconds", "0.8"));
 
     /** Custom model from player.glb, or null to draw the built-in blocky body. */
     private final ModelAsset custom;
@@ -76,6 +90,9 @@ public final class PlayerModel {
     private AnimatedModel animated;
     private AnimationClip idleClip;
     private AnimationClip walkClip;
+    private AnimationClip punchClip;
+    /** Counts up while a punch plays; 0 when not punching. */
+    private float punchTime;
     private float animationTime;
     private float idleTime;
     private float walkTime;
@@ -170,6 +187,22 @@ public final class PlayerModel {
                 if (!clips.isEmpty()) {
                     walkClip = clips.get(0);
                     model.addClip("walk", walkClip);
+                }
+            }
+            // The punch is optional: without the file, the hands swing instead.
+            Path punchFile = findFile(PUNCH_FILE);
+            if (punchFile != null) {
+                List<AnimationClip> clips = AnimatedModelLoader.loadClips(punchFile, model.skeleton());
+                if (!clips.isEmpty()) {
+                    punchClip = clips.get(0);
+                    model.addClip("punch", punchClip);
+                    System.out.printf("[PlayerModel] Punch: %s (%.1fs long; playing %.2fs from %.2fs)%n",
+                            punchFile.getFileName(), punchClip.durationSeconds(), PUNCH_SECONDS, PUNCH_START);
+                    if (punchClip.durationSeconds() > 3f && PUNCH_START == 0f) {
+                        System.out.println("[PlayerModel] That clip holds a whole timeline, not just a "
+                                + "punch. Export only the punch, or pick the moment it happens with "
+                                + "-PpunchStart=<seconds>.");
+                    }
                 }
             }
             System.out.println("[PlayerModel] Clips - idle: "
@@ -338,6 +371,36 @@ public final class PlayerModel {
         return animated != null;
     }
 
+    /** Advances the punch. Call once a frame from the game's update. */
+    public void advance(float deltaSeconds) {
+        advancePunch(deltaSeconds);
+    }
+
+    /** Starts a punch: the clip from player_punch.glb, or a swing of the hands without it. */
+    public void punch() {
+        punchTime = 0.0001f;
+    }
+
+    /** True while a punch is playing, so the sandbox knows not to start another. */
+    public boolean isPunching() {
+        return punchTime > 0f;
+    }
+
+    /** How far through the punch, 0 to 1 - what the hands swing along. */
+    private float punchProgress() {
+        return Math.min(1f, punchTime / PUNCH_SECONDS);
+    }
+
+    private void advancePunch(float deltaSeconds) {
+        if (punchTime <= 0f) {
+            return;
+        }
+        punchTime += deltaSeconds;
+        if (punchProgress() >= 1f) {
+            punchTime = 0f;
+        }
+    }
+
     /**
      * Advances and draws the rigged body.
      *
@@ -350,6 +413,15 @@ public final class PlayerModel {
      */
     public void renderAnimatedBody(ShaderProgram shader, Camera camera, float eyeHeight,
                                    float deltaSeconds, boolean moving) {
+        renderAnimatedBody(shader, camera.position(), camera.yaw(), eyeHeight, deltaSeconds, moving, true);
+    }
+
+    /**
+     * The same body seen from outside - third person, or the freecam - so it punches and walks
+     * there too, head and all.
+     */
+    public void renderAnimatedBody(ShaderProgram shader, Vector3f eye, float yaw, float eyeHeight,
+                                   float deltaSeconds, boolean moving, boolean hideHead) {
         if (animated == null) {
             return;
         }
@@ -357,6 +429,13 @@ public final class PlayerModel {
         // cycle - a walk that reset to frame zero on every step would look frozen.
         if (moving != wasWalking) {
             wasWalking = moving;
+        }
+        if (punchTime > 0f && punchClip != null) {
+            // A punch takes over the whole body until it finishes. The clip plays at its own
+            // speed from PUNCH_START, so the swing looks the way it was animated.
+            animated.pose(punchClip, PUNCH_START + punchProgress() * PUNCH_SECONDS);
+            drawAnimated(shader, eye, yaw, eyeHeight, hideHead);
+            return;
         }
         AnimationClip clip = moving && walkClip != null ? walkClip : idleClip;
         if (moving) {
@@ -368,12 +447,18 @@ public final class PlayerModel {
         }
         animated.pose(clip, animationTime);
 
-        Vector3f position = camera.position();
-        float feetY = position.y - eyeHeight;
-        shader.setUniform("uHeadCenter", position);
-        shader.setUniform("uHeadRadius", HEAD_HIDE_RADIUS * (eyeHeight / DEFAULT_PLAYER_HEIGHT));
-        shader.setUniform("uModel", scratch.translation(position.x, feetY, position.z)
-                .rotateY(-camera.yaw())
+        drawAnimated(shader, eye, yaw, eyeHeight, hideHead);
+    }
+
+    /** Draws the posed rigged model at someone's feet. */
+    private void drawAnimated(ShaderProgram shader, Vector3f eye, float yaw, float eyeHeight,
+                              boolean hideHead) {
+        float feetY = eye.y - eyeHeight;
+        shader.setUniform("uHeadCenter", eye);
+        shader.setUniform("uHeadRadius",
+                hideHead ? HEAD_HIDE_RADIUS * (eyeHeight / DEFAULT_PLAYER_HEIGHT) : NO_HEAD_CLIP);
+        shader.setUniform("uModel", scratch.translation(eye.x, feetY, eye.z)
+                .rotateY(-yaw)
                 .translate(0f, 0f, customOffsetZ)
                 .rotateY(customYawOffset)
                 .scale(customScale)
@@ -416,16 +501,51 @@ public final class PlayerModel {
         viewInverse.set(camera.viewMatrix()).invert();
         float bob = moving ? (float) Math.sin(walkPhase * 2f) * 0.02f : 0f;
 
-        drawHand(shader, 0.30f, bob);
-        drawHand(shader, -0.30f, -bob);
+        if (punchTime > 0f) {
+            // Out and back: the right hand throws the punch, the left stays put.
+            float progress = punchProgress();
+            float reach = (float) Math.sin(progress * Math.PI);
+            drawHand(shader, 0.30f - reach * 0.22f, bob + reach * 0.10f, reach * 0.55f);
+            drawHand(shader, -0.30f, -bob, 0f);
+            return;
+        }
+        drawHand(shader, 0.30f, bob, 0f);
+        drawHand(shader, -0.30f, -bob, 0f);
     }
 
-    private void drawHand(ShaderProgram shader, float sideOffset, float bob) {
+    /**
+     * The VR hands: one cube per controller, where the controller really is.
+     *
+     * <p>In VR nothing about the hands is animated - they are wherever the player is holding
+     * them, which is the whole point of playing in a headset.
+     *
+     * @param roomToWorld turns a position in the player's room into one in the game world
+     */
+    public void renderVrHands(ShaderProgram shader, net.coffeebrewia.roastengine.vr.VrSystem.Hand left,
+                              net.coffeebrewia.roastengine.vr.VrSystem.Hand right, Matrix4f roomToWorld) {
+        drawVrHand(shader, left, roomToWorld);
+        drawVrHand(shader, right, roomToWorld);
+    }
+
+    private void drawVrHand(ShaderProgram shader, net.coffeebrewia.roastengine.vr.VrSystem.Hand hand,
+                            Matrix4f roomToWorld) {
+        if (!hand.tracked) {
+            return; // controller asleep or out of sight: better no hand than a hand on the floor
+        }
+        shader.setUniform("uModel", scratch.set(roomToWorld)
+                .translate(hand.position)
+                .rotate(hand.rotation)
+                .scale(0.09f, 0.09f, 0.16f));
+        skin.draw();
+    }
+
+    /** @param thrust how far the hand is pushed forward, for a punch */
+    private void drawHand(ShaderProgram shader, float sideOffset, float bob, float thrust) {
         // View space: +X right, +Y up, -Z forward.
         shader.setUniform("uModel", scratch.set(viewInverse)
-                .translate(sideOffset, -0.30f + bob, -HAND_DISTANCE)
+                .translate(sideOffset, -0.30f + bob, -HAND_DISTANCE - thrust)
                 .rotateX((float) Math.toRadians(-14))
-                .scale(0.11f, 0.11f, 0.40f));
+                .scale(0.11f, 0.11f, 0.40f + thrust * 0.3f));
         skin.draw();
     }
 

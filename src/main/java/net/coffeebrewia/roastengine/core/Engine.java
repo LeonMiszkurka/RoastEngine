@@ -53,6 +53,8 @@ public final class Engine {
     private final GameSettings settings;
     private final AudioEngine audio;
     private final ModConfig modConfig;
+    /** The headset, when the game started in VR; null when playing flat. */
+    private net.coffeebrewia.roastengine.vr.VrSystem vr;
     private final net.coffeebrewia.roastengine.account.CoffeeBrewAccount account;
     private final ModManager modManager;
     private final ModIoClient modIo;
@@ -102,6 +104,10 @@ public final class Engine {
         ui = new Ui(renderer2D, input);
         audio.init();
         ui.setClickSound(() -> audio.play(SoundBank.CLICK, 0.5f, 1f));
+        // VR is opt-in: -Pvr on the command line, or the VR API mod being switched on.
+        if (Boolean.getBoolean("roastengine.vr") || System.getProperty("roastengine.vr") != null) {
+            vr = net.coffeebrewia.roastengine.vr.VrSystem.tryStart(window.handle());
+        }
         states.switchTo(bootState.apply(this));
     }
 
@@ -118,6 +124,15 @@ public final class Engine {
             lastTime = now;
 
             glfwPollEvents();
+            if (vr != null) {
+                vr.pollEvents();
+                if (vr.shouldQuit()) {
+                    running = false;
+                }
+                // The runtime decides when the next frame is due; it also reports where the head
+                // and hands are, which the game needs before it updates.
+                vrFrameReady = vr.waitFrame();
+            }
             gamepads.poll();
             // Actions are resolved before the state runs, so update() sees this frame's input
             // whether it came from the keyboard or from a controller a mod described.
@@ -130,6 +145,10 @@ public final class Engine {
 
             handleScreenshots(delta);
             input.endFrame();
+            if (vr != null && vrFrameReady) {
+                vr.endFrame();
+                vrFrameReady = false;
+            }
             window.swapBuffers();
             if (background) {
                 idleUntil(now + BACKGROUND_FRAME_NANOS);
@@ -144,6 +163,8 @@ public final class Engine {
             }
         }
     }
+
+    private boolean vrFrameReady;
 
     /** 30 frames a second in the background: enough to stay online, easy on the battery. */
     private static final long BACKGROUND_FRAME_NANOS = 1_000_000_000L / 30;
@@ -250,6 +271,16 @@ public final class Engine {
 
     public AudioEngine audio() {
         return audio;
+    }
+
+    /** The headset, or null when playing on a monitor. */
+    public net.coffeebrewia.roastengine.vr.VrSystem vr() {
+        return vr;
+    }
+
+    /** True while the game is drawing into a headset. */
+    public boolean inVr() {
+        return vr != null && vr.isRunning();
     }
 
     /** The player's CoffeeBrew Interactive account (needed for multiplayer). */

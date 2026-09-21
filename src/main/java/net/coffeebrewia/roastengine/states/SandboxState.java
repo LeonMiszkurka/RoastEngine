@@ -27,7 +27,9 @@ import net.coffeebrewia.roastengine.ui.PauseMenu;
 import net.coffeebrewia.roastengine.ui.Theme;
 import net.coffeebrewia.roastengine.world.Interactions;
 import net.coffeebrewia.roastengine.world.LoadedWorld;
+import net.coffeebrewia.roastengine.world.EntitySystem;
 import net.coffeebrewia.roastengine.world.NpcSystem;
+import net.coffeebrewia.roastengine.world.ScriptSystem;
 import net.coffeebrewia.roastengine.world.WorldLoader;
 import net.coffeebrewia.roastengine.world.WorldObject;
 import org.joml.Matrix4f;
@@ -121,6 +123,14 @@ public final class SandboxState implements GameState {
     private LoadedWorld world;
     private final Interactions interactions = new Interactions();
     private final NpcSystem npcs = new NpcSystem();
+    /** The mods' scripts, running on this player's computer. */
+    private ScriptSystem scripts;
+    /** Models flagged as entities: they wander, and they can be punched. */
+    private final EntitySystem entities = new EntitySystem();
+    /** How far a punch reaches. */
+    private static final float PUNCH_REACH = 2.8f;
+    /** The entity the crosshair is on, if any. */
+    private WorldObject punchTarget;
     private PauseMenu pauseMenu;
     private PostProcessor post;
     /** Folder of the shader pack currently loaded, to notice when the player swaps packs. */
@@ -182,6 +192,12 @@ public final class SandboxState implements GameState {
     private boolean cheatMenuOpen;
     /** Where the body stays while the camera flies free. */
     private final Vector3f freecamBody = new Vector3f();
+    /** How far the player has turned themselves with the stick, in VR. */
+    private float vrYaw;
+    private boolean vrTurnReady = true;
+    private final Matrix4f roomToWorld = new Matrix4f();
+    private final Matrix4f eyeView = new Matrix4f();
+    private final Matrix4f eyeProjection = new Matrix4f();
     /** Recent pings for the graph, four a second, oldest first once it wraps. */
     private final int[] pingHistory = new int[60];
     private int pingCursor;
@@ -261,6 +277,9 @@ public final class SandboxState implements GameState {
             npcs.playerPassedOut(new Vector3f(Float.parseFloat(parts[0]),
                     Float.parseFloat(parts[1]), Float.parseFloat(parts[2])));
         }
+        scripts = new ScriptSystem(world, scriptHooks());
+        scripts.load();
+        entities.load(world);
         playerModel = new PlayerModel(EYE_HEIGHT);
         // Dev aid: -PstartPitch=60 starts the camera looking down (handy for screenshots).
         String startPitch = System.getProperty("roastengine.startPitch");
@@ -284,6 +303,51 @@ public final class SandboxState implements GameState {
             pause();
             pauseMenu.openAt(startMenu);
         }
+    }
+
+    /** What scripts are allowed to do to the game: say things, make noises and move the player. */
+    private ScriptSystem.Hooks scriptHooks() {
+        return new ScriptSystem.Hooks() {
+            @Override
+            public void notice(String text) {
+                setNotice(text);
+            }
+
+            @Override
+            public void chat(String text) {
+                if (online != null) {
+                    online.sendChat(text);
+                } else {
+                    setNotice(text);
+                }
+            }
+
+            @Override
+            public void playSound(String name, float volume, float pitch) {
+                engine.audio().play(name, Math.max(0f, Math.min(2f, volume)),
+                        Math.max(0.1f, Math.min(3f, pitch)));
+            }
+
+            @Override
+            public Vector3f playerEye() {
+                return freecamActive ? freecamBody : camera.position();
+            }
+
+            @Override
+            public void teleportPlayer(float x, float y, float z) {
+                camera.position().set(x, y, z);
+                verticalVelocity = 0f;
+                unstick();
+            }
+
+            @Override
+            public void pushPlayer(float x, float y, float z) {
+                velocityX += x;
+                velocityZ += z;
+                verticalVelocity += y;
+                onGround = false;
+            }
+        };
     }
 
     /** Loads any sounds the world's mods ship, starts the music and hooks up effect sounds. */
@@ -399,6 +463,14 @@ public final class SandboxState implements GameState {
         boolean typing = chatting;
         float forward = typing ? 0f : actions.axis(InputAxis.MOVE_Y);
         float right = typing ? 0f : actions.axis(InputAxis.MOVE_X);
+        if (engine.inVr()) {
+            // The body faces wherever the player is looking, and the stick walks from there.
+            camera.setYaw(vrYaw + engine.vr().headYaw());
+            float[] stick = engine.vr().input().move();
+            forward = stick[1];
+            right = stick[0];
+            updateVrTurn(dt);
+        }
         // Dev aid: -PautoWalk=<seconds> holds "forward" so movement can be tested without hands.
         if (autoWalkSeconds > 0f) {
             autoWalkSeconds -= dt;
@@ -442,7 +514,8 @@ public final class SandboxState implements GameState {
         float dx = velocityX * dt;
         float dz = velocityZ * dt;
 
-        if (onGround && !typing && actions.wasPressed(InputButton.JUMP)) {
+        boolean vrJump = engine.inVr() && engine.vr().input().jumpPressed();
+        if (onGround && !typing && (actions.wasPressed(InputButton.JUMP) || vrJump)) {
             verticalVelocity = JUMP_VELOCITY * cheats.value("jump", 1f);
             onGround = false;
         }
@@ -471,7 +544,8 @@ public final class SandboxState implements GameState {
 
         // Doors and drinks: E interacts, holding E keeps drinking.
         interactionTarget = interactions.findTarget(world, camera);
-        boolean interactPressed = !chatting && actions.wasPressed(InputButton.INTERACT);
+        boolean vrPunch = engine.inVr() && engine.vr().input().punchPressed();
+        boolean interactPressed = !chatting && (actions.wasPressed(InputButton.INTERACT) || vrPunch);
         boolean interactHeld = !chatting && actions.isDown(InputButton.INTERACT);
         // Dev aid: -PautoInteract=<seconds> presses E at that time and holds it afterwards.
         if (autoInteractAt > 0f) {
@@ -481,6 +555,12 @@ public final class SandboxState implements GameState {
                 interactPressed = !autoInteractDone;
                 autoInteractDone = true;
             }
+        }
+        punchTarget = entities.isEmpty() ? null
+                : entities.target(camera.position(), camera.forward(new Vector3f()), PUNCH_REACH);
+        if (interactPressed && passOutTimer <= 0f && punchTarget != null) {
+            throwPunch(punchTarget);
+            interactPressed = false; // the punch used the key press
         }
         if (interactPressed && passOutTimer <= 0f) {
             if (interactionTarget != null && interactionTarget.isDoor()
@@ -492,9 +572,16 @@ public final class SandboxState implements GameState {
             } else {
                 interactions.interact(interactionTarget);
             }
+            if (interactionTarget != null) {
+                scripts.interact(interactionTarget);
+            }
         }
         interactions.setInstantDoors(cheats.on("instantDoors"));
         interactions.update(world, dt, interactHeld && passOutTimer <= 0f);
+        scripts.update(dt);
+        entities.update(dt, camera.position());
+        playerModel.advance(dt);
+        reportTouches();
         npcs.update(dt, camera.position());
         if (npcs.consumeLiftOff()) {
             engine.audio().play(SoundBank.WHOOSH, 1f, 1f);
@@ -866,6 +953,50 @@ public final class SandboxState implements GameState {
         return true;
     }
 
+    /**
+     * Turning in VR: a flick of the right stick turns the room in steps. Smooth turning is what
+     * makes people ill, so this snaps instead.
+     */
+    private void updateVrTurn(float dt) {
+        float[] stick = engine.vr().input().turn();
+        if (Math.abs(stick[0]) < 0.6f) {
+            vrTurnReady = true;
+            return;
+        }
+        if (vrTurnReady) {
+            vrTurnReady = false;
+            vrYaw += Math.signum(stick[0]) * (float) Math.toRadians(30);
+        }
+    }
+
+    /** Swings at an entity: the animation, the sound, and sending it flying. */
+    private void throwPunch(WorldObject target) {
+        if (playerModel.isPunching()) {
+            return;
+        }
+        playerModel.punch();
+        engine.audio().play(SoundBank.DOOR, 0.5f, 1.6f);
+        Vector3f direction = camera.forward(new Vector3f());
+        direction.y = Math.max(0.1f, direction.y);
+        entities.punch(target, direction, 1f);
+        setNotice("You punched " + target.name);
+    }
+
+    /** Tells scripts which objects the player is standing in or walking through. */
+    private void reportTouches() {
+        updatePlayerBox();
+        boolean any = false;
+        for (WorldObject object : world.objects()) {
+            if (!object.removedByScript && object.overlaps(playerMin, playerMax)) {
+                scripts.touch(object);
+                any = true;
+            }
+        }
+        if (!any) {
+            scripts.endTouches();
+        }
+    }
+
     /** True when the player's box overlaps any solid object. */
     private boolean blocked() {
         if (world == null) {
@@ -1052,6 +1183,35 @@ public final class SandboxState implements GameState {
 
     @Override
     public void render() {
+        if (engine.inVr()) {
+            renderToHeadset();
+            return;
+        }
+        renderView();
+    }
+
+    /**
+     * The world drawn twice, once for each eye, into the headset's own textures. The HUD is left
+     * on the mirror window: a flat overlay pinned to the eyes is horrible to read in VR.
+     */
+    private void renderToHeadset() {
+        var vr = engine.vr();
+        Vector3f feet = new Vector3f(camera.position()).sub(0f, EYE_HEIGHT, 0f);
+        roomToWorld.translation(feet).rotateY(-vrYaw);
+        for (int eye = 0; eye < vr.eyeCount(); eye++) {
+            if (!vr.beginEye(eye)) {
+                continue;
+            }
+            vr.eyeView(eye, eyeView, feet, vrYaw);
+            vr.eyeProjection(eye, eyeProjection, camera.near(), camera.far());
+            camera.setEyeOverride(eyeView, eyeProjection);
+            renderView();
+            camera.setEyeOverride(null, null);
+            vr.endEye(eye);
+        }
+    }
+
+    private void renderView() {
         boolean shaders = post.isActive();
         if (shaders) {
             post.beginScene();
@@ -1093,6 +1253,9 @@ public final class SandboxState implements GameState {
             if (!object.npc.isEmpty()) {
                 continue; // characters are drawn by the NPC system
             }
+            if (object.removedByScript) {
+                continue; // a script took it away
+            }
             // renderModel plays any animation the mod gave the object; a still object gets
             // its placed matrix back unchanged.
             Matrix4f model = object.renderModel(clock);
@@ -1120,7 +1283,13 @@ public final class SandboxState implements GameState {
             }
         } else {
             playerModel.renderBody(shader, camera, EYE_HEIGHT, walkPhase, moving);
-            playerModel.renderHands(shader, camera, walkPhase, moving);
+            if (engine.inVr()) {
+                // Your hands are the controllers; nothing else moves them.
+                playerModel.renderVrHands(shader, engine.vr().input().leftHand(),
+                        engine.vr().input().rightHand(), roomToWorld);
+            } else {
+                playerModel.renderHands(shader, camera, walkPhase, moving);
+            }
         }
         if (online != null && !playerModel.isAnimated()) {
             for (RemotePlayer other : online.others()) {
@@ -1145,9 +1314,10 @@ public final class SandboxState implements GameState {
             skinnedShader.setUniform("uEmissiveStrength", shaders ? 1f : 0.35f);
             if (playerModel.isAnimated() && passOutTimer <= 0f) {
                 if (ownBodyFromOutside) {
-                    playerModel.renderOtherAnimated(skinnedShader,
+                    // Still our own body: it punches and walks as it does in first person.
+                    playerModel.renderAnimatedBody(skinnedShader,
                             freecamActive ? freecamBody : bodyPosition(viewOffset), camera.yaw(),
-                            EYE_HEIGHT, clock, moving);
+                            EYE_HEIGHT, lastDelta, moving, false);
                 } else {
                     playerModel.renderAnimatedBody(skinnedShader, camera, EYE_HEIGHT, lastDelta, moving);
                 }
@@ -1306,7 +1476,8 @@ public final class SandboxState implements GameState {
             r.textCentered(notice, 0, 44, w, 20, 1.75f, hudText);
         }
 
-        String prompt = interactions.prompt(interactionTarget);
+        String prompt = punchTarget != null ? "Press E to punch " + punchTarget.name
+                : interactions.prompt(interactionTarget);
         if (prompt != null && engine.input().isCursorCaptured()) {
             float boxWidth = r.textWidth(prompt, 2f) + 28;
             r.rect((w - boxWidth) / 2f, h * 0.62f, boxWidth, 34, Theme.BACKGROUND.withAlpha(0.72f));

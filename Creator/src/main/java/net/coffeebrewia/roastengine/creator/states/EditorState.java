@@ -638,6 +638,12 @@ public final class EditorState implements GameState {
             selected.slippery = !selected.slippery;
             project.markDirty();
         }
+        fy += 26;
+        // An entity walks around on its own and can be punched into a ragdoll.
+        if (ui.checkbox("Entity  (walks about, can be punched)", fx, fy, selected.entity)) {
+            selected.entity = !selected.entity;
+            project.markDirty();
+        }
         fy += 32;
 
         // --- Script ---

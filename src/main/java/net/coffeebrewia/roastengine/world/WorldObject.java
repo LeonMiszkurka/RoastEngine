@@ -62,6 +62,29 @@ public final class WorldObject {
     public float openAmount;
     /** Whether a door is heading open or shut. Doors always start shut. */
     public boolean doorWantsOpen;
+
+    // --- Set by scripts (see ScriptSystem) --------------------------------------------
+    /** How far a script has moved this object from where the level placed it. */
+    public final Vector3f scriptOffset = new Vector3f();
+    /**
+     * Extra turn from a script or the entity system, in radians. Visual only: the collision
+     * boxes keep the angle the level placed them at.
+     */
+    public float scriptYaw;
+    public float scriptPitch;
+    public float scriptRoll;
+    /** Walks about and can be punched into a ragdoll. */
+    public boolean entity;
+    /** A script removed it: not drawn, does not block, cannot be interacted with. */
+    public boolean removedByScript;
+    /** Values the level gave this object's script, from the Creator's inspector. */
+    public java.util.Map<String, String> scriptParams = java.util.Map.of();
+    /** Which mod this object came from, so its script is looked for in the right folder. */
+    public java.nio.file.Path modFolder;
+
+    private final Vector3f probeMin = new Vector3f();
+    private final Vector3f probeMax = new Vector3f();
+    private final Matrix4f scripted = new Matrix4f();
     /** Scripted character role ("doorman", "janitor") or empty; NPCs are drawn by NpcSystem. */
     public String npc = "";
     /** Where the model was loaded from, so NPCs can load an animated copy of it. */
@@ -84,9 +107,20 @@ public final class WorldObject {
      * @param time seconds since the world was loaded
      */
     public Matrix4f renderModel(float time) {
+        if (scriptOffset.lengthSquared() > 0 || scriptYaw != 0f || scriptPitch != 0f || scriptRoll != 0f) {
+            // Moved or turned by a script or by being punched: place it, then turn it about its
+            // own middle so it tumbles where it is rather than orbiting the level's origin.
+            Matrix4f placed = animation == null || !animation.isActive() ? model : animatedModel(time);
+            return scripted.translation(scriptOffset).mul(placed)
+                    .rotateY(scriptYaw).rotateX(scriptPitch).rotateZ(scriptRoll);
+        }
         if (animation == null || !animation.isActive()) {
             return model;
         }
+        return animatedModel(time);
+    }
+
+    private Matrix4f animatedModel(float time) {
         model.getTranslation(animationOrigin);
         animated.identity().translate(animationOrigin);
         animation.apply(animated, time);
@@ -178,7 +212,8 @@ public final class WorldObject {
      * blocked even though it looks open.
      */
     public boolean isSolid() {
-        return collision && !kills && !(isDoor() && openAmount > 0.25f) && npc.isEmpty();
+        return collision && !kills && !removedByScript && !(isDoor() && openAmount > 0.25f)
+                && npc.isEmpty();
     }
 
     public boolean isInteractive() {
@@ -195,7 +230,7 @@ public final class WorldObject {
 
     /** Centre of the object, used for "how close am I" checks. */
     public Vector3f center(Vector3f out) {
-        return out.set(worldMin).add(worldMax).mul(0.5f);
+        return out.set(worldMin).add(worldMax).mul(0.5f).add(scriptOffset);
     }
 
     /** Cheap rejection against the whole object before testing individual triangles. */
@@ -207,11 +242,19 @@ public final class WorldObject {
 
     /** True when any part intersects the given box (resting on a surface does not count). */
     public boolean overlaps(Vector3f min, Vector3f max) {
-        if (!nearBounds(min, max)) {
+        if (removedByScript) {
             return false;
         }
+        // The boxes were worked out where the level placed this object, so a script that has
+        // moved it is handled by moving what we test against it, not the boxes themselves.
+        Vector3f testMin = min;
+        Vector3f testMax = max;
+        if (scriptOffset.lengthSquared() > 0) {
+            testMin = probeMin.set(min).sub(scriptOffset);
+            testMax = probeMax.set(max).sub(scriptOffset);
+        }
         for (Box box : boxes) {
-            if (box.overlaps(min, max)) {
+            if (box.overlaps(testMin, testMax)) {
                 return true;
             }
         }

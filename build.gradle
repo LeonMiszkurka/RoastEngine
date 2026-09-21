@@ -42,6 +42,9 @@ dependencies {
     implementation 'org.lwjgl:lwjgl-assimp'   // .obj / .glb / .gltf / .fbx model loading
     implementation 'org.lwjgl:lwjgl-openal'   // sound effects and music
     implementation 'org.lwjgl:lwjgl-tinyfd'   // "Install Mod from File..." picker
+    // VR through OpenXR (Quest 2 over Link, or any SteamVR headset). Windows and Linux only:
+    // macOS has no OpenXR runtime, so the Mac build simply never enters VR.
+    implementation 'org.lwjgl:lwjgl-openxr'
     runtimeOnly "org.lwjgl:lwjgl::${lwjglNatives}"
     runtimeOnly "org.lwjgl:lwjgl-glfw::${lwjglNatives}"
     runtimeOnly "org.lwjgl:lwjgl-opengl::${lwjglNatives}"
@@ -49,6 +52,9 @@ dependencies {
     runtimeOnly "org.lwjgl:lwjgl-assimp::${lwjglNatives}"
     runtimeOnly "org.lwjgl:lwjgl-openal::${lwjglNatives}"
     runtimeOnly "org.lwjgl:lwjgl-tinyfd::${lwjglNatives}"
+    if (!isMac) {
+        runtimeOnly "org.lwjgl:lwjgl-openxr::${lwjglNatives}"
+    }
 
     implementation "org.joml:joml:${jomlVersion}"
     implementation "com.google.code.gson:gson:${gsonVersion}"
@@ -105,7 +111,7 @@ tasks.named('run') {
     ['playerModelOffset', 'playerModelYaw', 'playerModelScale', 'playerModel', 'hands',
      'autoWalk', 'playerHeight', 'startYaw', 'autoInteract', 'spawnAt',
      'headHideRadius', 'sipsToPassOut', 'passOutAt', 'startMenu', 'forceShaders',
-     'modsDir', 'configDir', 'join', 'playerName', 'autoPick', 'server.1.wakeUrl', 'accountsUrl', 'autoChat', 'autoCheats', 'openCheatMenu'].each { name ->
+     'modsDir', 'configDir', 'join', 'playerName', 'autoPick', 'server.1.wakeUrl', 'accountsUrl', 'autoChat', 'autoCheats', 'openCheatMenu', 'punchStart', 'punchSeconds'].each { name ->
         if (project.hasProperty(name)) {
             systemProperty "roastengine.${name}", project.property(name)
         }
@@ -138,7 +144,7 @@ def packageInput = layout.buildDirectory.dir('package-input')
 def starterMods = (project.findProperty('starterMods') ?: 'the-club-map').toString().split(',')*.trim().findAll { it }
 
 // The animated player model: the idle clip carries the mesh, the walk clip adds its animation.
-def playerModelFiles = ['player_idle.glb', 'player_walk.glb', 'playermodel.glb']
+def playerModelFiles = ['player_idle.glb', 'player_walk.glb', 'player_punch.glb', 'playermodel.glb']
 
 tasks.register('packageInput', Sync) {
     dependsOn tasks.named('jar'), project(':Creator').tasks.named('jar')
@@ -353,7 +359,8 @@ linuxArches.each { arch, info ->
     def natives = configurations.create("linuxNatives_${arch}")
     dependencies {
         add(natives.name, platform("org.lwjgl:lwjgl-bom:${lwjglVersion}"))
-        ['lwjgl', 'lwjgl-glfw', 'lwjgl-opengl', 'lwjgl-stb', 'lwjgl-assimp', 'lwjgl-openal', 'lwjgl-tinyfd'].each {
+        ['lwjgl', 'lwjgl-glfw', 'lwjgl-opengl', 'lwjgl-stb', 'lwjgl-assimp', 'lwjgl-openal',
+         'lwjgl-tinyfd', 'lwjgl-openxr'].each {
             add(natives.name, "org.lwjgl:${it}::${info.natives}")
         }
     }
@@ -448,10 +455,115 @@ path = "RoastEngine/bin/RoastEngine Creator"
     }
 }
 
+// --- Windows -----------------------------------------------------------------------------
+// The VR build: Quest Link and SteamVR are Windows-first, and there is no OpenXR runtime for
+// macOS at all. Built the same way as the Linux ones - jars, Windows natives and a Java runtime.
+
+def windowsNatives = 'natives-windows'
+def windowsLwjgl = configurations.create('windowsNatives')
+dependencies {
+    add(windowsLwjgl.name, platform("org.lwjgl:lwjgl-bom:${lwjglVersion}"))
+    ['lwjgl', 'lwjgl-glfw', 'lwjgl-opengl', 'lwjgl-stb', 'lwjgl-assimp', 'lwjgl-openal',
+     'lwjgl-tinyfd', 'lwjgl-openxr'].each {
+        add(windowsLwjgl.name, "org.lwjgl:${it}::${windowsNatives}")
+    }
+}
+
+def windowsJre = layout.buildDirectory.dir("jre-cache/windows-x64-${linuxJavaVersion}")
+def downloadWindowsJre = tasks.register('downloadWindowsJre') {
+    description = 'Downloads the Windows Java runtime bundled with the game.'
+    outputs.dir(windowsJre)
+    doLast {
+        def target = windowsJre.get().asFile
+        if (new File(target, 'bin/java.exe').exists()) {
+            return
+        }
+        target.deleteDir()
+        target.mkdirs()
+        def url = "https://api.adoptium.net/v3/binary/latest/${linuxJavaVersion}/ga/windows/x64/jre/hotspot/normal/eclipse"
+        def archive = new File(temporaryDir, 'jre.zip')
+        println "Downloading Java ${linuxJavaVersion} runtime for Windows..."
+        new URL(url).withInputStream { input -> archive.withOutputStream { it << input } }
+        def unpacked = new File(temporaryDir, 'unpacked')
+        unpacked.deleteDir()
+        unpacked.mkdirs()
+        runCommand(['unzip', '-q', archive.path, '-d', unpacked.path])
+        def root = unpacked.listFiles().find { it.isDirectory() }
+        runCommand(['sh', '-c', "cp -R '${root.path}/.' '${target.path}/'"])
+        archive.delete()
+    }
+}
+
+tasks.register('packageWindowsRelease') {
+    group = 'distribution'
+    description = 'Builds the Windows release zip (the one that can play in VR).'
+    dependsOn 'packageInput', downloadWindowsJre
+    doLast {
+        def stage = new File(temporaryDir, 'RoastEngine')
+        stage.parentFile.deleteDir()
+        stage.mkdirs()
+        copy {
+            from packageInput
+            into new File(stage, 'app')
+            exclude '**/*natives-macos*', '**/*natives-linux*', '**/*natives-windows*'
+        }
+        copy {
+            from windowsLwjgl
+            into new File(stage, 'app')
+            include '*natives*'
+        }
+        copy {
+            from windowsJre
+            into new File(stage, 'runtime')
+        }
+        def launcher = { String mainClass, String extra -> """\
+@echo off
+rem Starts RoastEngine with the Java runtime shipped next to it.
+set HERE=%~dp0..
+"%HERE%\\runtime\\bin\\javaw.exe" --enable-native-access=ALL-UNNAMED ${extra} ^
+    -Droastengine.launcher="%HERE%\\bin\\RoastEngine.bat" ^
+    -cp "%HERE%\\app\\*" ${mainClass} %*
+""" }
+        def bin = new File(stage, 'bin')
+        bin.mkdirs()
+        new File(bin, 'RoastEngine.bat').text = launcher('net.coffeebrewia.roastengine.Main', '')
+        // The VR launcher is the same game with the headset switched on.
+        new File(bin, 'RoastEngine VR.bat').text =
+                launcher('net.coffeebrewia.roastengine.Main', '-Droastengine.vr=true')
+        new File(bin, 'RoastEngine Creator.bat').text =
+                launcher('net.coffeebrewia.roastengine.creator.CreatorMain', '')
+        new File(stage, 'Play RoastEngine.bat').text =
+                '@echo off\r\nstart "" "%~dp0bin\\RoastEngine.bat"\r\n'
+        new File(stage, 'Play in VR.bat').text =
+                '@echo off\r\nstart "" "%~dp0bin\\RoastEngine VR.bat"\r\n'
+        new File(stage, 'README.txt').text = file('release/README-windows.txt').text
+        new File(stage.parentFile, '.itch.toml').text = """\
+[[actions]]
+name = "play"
+path = "RoastEngine/Play RoastEngine.bat"
+
+[[actions]]
+name = "Play in VR"
+path = "RoastEngine/Play in VR.bat"
+
+[[actions]]
+name = "RoastEngine Creator"
+path = "RoastEngine/bin/RoastEngine Creator.bat"
+"""
+        def out = releaseDir.get().asFile
+        out.mkdirs()
+        def zip = new File(out, "RoastEngine-${releaseVersion}-windows-x64.zip")
+        zip.delete()
+        runCommand(['zip', '-qr', zip.path, 'RoastEngine', '.itch.toml'], stage.parentFile)
+        println "Windows release: ${zip}"
+    }
+}
+
 tasks.register('packageRelease') {
     group = 'distribution'
     description = 'Builds every release zip into build/release/.'
-    dependsOn 'packageMacRelease', 'packageLinuxRelease_x64', 'packageLinuxRelease_arm64'
+    dependsOn 'packageMacRelease', 'packageLinuxRelease_x64', 'packageLinuxRelease_arm64',
+            'packageWindowsRelease'
 }
 
 
@@ -467,6 +579,7 @@ tasks.register('packMods') {
     description = 'Zips every mod in packs/ into build/packs/.'
     def packsDir = layout.projectDirectory.dir('packs').asFile
     def outDir = layout.buildDirectory.dir('packs')
+    inputs.dir(packsDir) // so new artwork or a changed api.json repacks
     outputs.dir(outDir)
     doLast {
         def out = outDir.get().asFile

@@ -1,0 +1,8 @@
+{
+  "name": "VR API",
+  "nameId": "vr-api",
+  "version": "1.0.0",
+  "type": "api",
+  "engine": "RoastEngine 0.1",
+  "description": "Play RoastEngine in a headset. Your two controllers become your two hands, the world is drawn for each eye, and you walk with the sticks. Needs a PC with a VR runtime (Meta Quest Link, Air Link or SteamVR) - Windows or Linux. Install it, switch it on, and start the game with VR enabled."
+}

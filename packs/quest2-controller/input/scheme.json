@@ -1,0 +1,24 @@
+{
+  "name": "Quest 2 Touch",
+  "device": "gamepad",
+
+  "_comment": "Touch controllers seen as a gamepad, for playing flat over Link. In VR the headset's own runtime drives the game (see the VR API) and this scheme is not used.",
+
+  "deadzone": 0.15,
+  "lookSpeed": 900,
+  "lookCurve": 2.0,
+
+  "axes": {
+    "moveX": {"axis": "LEFT_X"},
+    "moveY": {"axis": "LEFT_Y", "invert": true},
+    "lookX": {"axis": "RIGHT_X"},
+    "lookY": {"axis": "RIGHT_Y"}
+  },
+
+  "buttons": {
+    "jump": "A",
+    "sprint": ["LEFT_THUMB", "LEFT_BUMPER"],
+    "interact": ["RIGHT_BUMPER", "X"],
+    "pause": ["START", "BACK"]
+  }
+}

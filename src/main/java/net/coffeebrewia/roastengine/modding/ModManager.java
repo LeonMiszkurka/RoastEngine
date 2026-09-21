@@ -272,6 +272,14 @@ public final class ModManager {
         }
     }
 
+    /** Deletes an installed mod's folder and forgets it was enabled. */
+    public void uninstall(LocalMod mod) throws IOException {
+        deleteRecursively(mod.folder());
+        setEnabled(mod, false);
+        scan();
+        System.out.println("[Mods] Removed " + mod.name());
+    }
+
     /**
      * Installs a mod straight from a zip on this computer - an <b>external mod</b>: one that is
      * not on mod.io, such as a hack client or something a friend sent. The zip is the same shape

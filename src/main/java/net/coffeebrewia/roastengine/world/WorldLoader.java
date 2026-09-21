@@ -86,6 +86,10 @@ public final class WorldLoader {
                         object.label,
                         object.fill);
                 placed.npc = object.npc;
+                placed.entity = object.entity;
+                placed.scriptParams = object.scriptParams == null
+                        ? java.util.Map.of() : java.util.Map.copyOf(object.scriptParams);
+                placed.modFolder = mod.folder();
                 placed.assetPath = mod.folder().resolve("assets").resolve(object.asset);
                 placed.yawDegrees = object.rotation.y;
                 placed.animation = object.animation;
@@ -94,7 +98,7 @@ public final class WorldLoader {
             }
             System.out.println("[World] " + mod.name() + ": " + loaded + " object(s) from " + SCENE_FILE);
             if (!hasNoScripts(scene)) {
-                System.out.println("[World] " + mod.name() + " ships scripts; script execution is not implemented yet");
+                System.out.println("[World] " + mod.name() + " ships scripts (see ScriptSystem)");
             }
         }
         return world;

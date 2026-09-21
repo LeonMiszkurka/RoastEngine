@@ -33,6 +33,11 @@ public final class SceneObject {
     public float fill = 1f;
     /** Scripted character role: "doorman" (turns to you at the door) or "janitor". */
     public String npc = "";
+    /**
+     * An entity walks around by itself and can be punched into a ragdoll (see EntitySystem).
+     * Any imported model can be one.
+     */
+    public boolean entity = false;
     /** Prompt shown when the player looks at it, e.g. "open the door". */
     public String label = "";
     /** Optional Python script (file name inside the project's {@code scripts/} folder). */

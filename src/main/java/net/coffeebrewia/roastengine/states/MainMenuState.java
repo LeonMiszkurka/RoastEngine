@@ -250,8 +250,8 @@ public final class MainMenuState implements GameState {
         if (ui.button("Create Account", fx + half + 10, fy, half, 34)) {
             openAccountDialog(AccountDialog.CREATE);
         }
-        r.text("Needed for multiplayer. One account for every CoffeeBrew game.", fx, fy + 44, 1.25f,
-                Theme.TEXT_MUTED);
+        r.text("Needed for multiplayer.", fx, fy + 44, 1.25f, Theme.TEXT_MUTED);
+        r.text("One account for every CoffeeBrew game.", fx, fy + 60, 1.25f, Theme.TEXT_MUTED);
     }
 
     private void openAccountDialog(AccountDialog which) {
@@ -509,27 +509,121 @@ public final class MainMenuState implements GameState {
         float listW = w - 24;
         float listH = h - (listY - y) - 12;
 
-        if (browserMessage != null) {
+        // Where a mod came from decides which list it belongs in: anything with a mod.io id is a
+        // mod.io mod (even while signed out, when the remote list is empty), and everything else
+        // was installed from a file or made here.
+        List<LocalMod> external = installed.stream().filter(mod -> mod.modIoId() == 0).toList();
+        List<LocalMod> fromModIo = installed.stream()
+                .filter(mod -> mod.modIoId() != 0)
+                .filter(mod -> mods.stream().noneMatch(remote -> remote.id() == mod.modIoId()))
+                .toList();
+        if (browserMessage != null && external.isEmpty() && fromModIo.isEmpty()) {
             r.textCentered(browserMessage, listX, listY, listW, listH, 1.75f, Theme.TEXT_MUTED);
             return;
         }
 
         boolean listHovered = ui.isHovered(listX, listY, listW, listH);
-        float maxScroll = Math.max(0, mods.size() * ROW_HEIGHT - listH);
+        int rowCount = external.size() + fromModIo.size() + mods.size() + 2;
+        float maxScroll = Math.max(0, rowCount * ROW_HEIGHT - listH);
         if (listHovered) {
             scroll -= engine.input().scrollY() * 40f;
         }
         scroll = Math.max(0, Math.min(maxScroll, scroll));
 
         r.pushClip(listX, listY, listW, listH);
-        for (int i = 0; i < mods.size(); i++) {
-            float rowY = listY + i * ROW_HEIGHT - scroll;
-            if (rowY + ROW_HEIGHT < listY || rowY > listY + listH) {
-                continue; // off screen
+        float rowY = listY - scroll;
+
+        if (!external.isEmpty()) {
+            rowY = drawSectionHeading("EXTERNAL MODS  (installed from a file)", listX, rowY, listY, listH);
+            for (LocalMod mod : external) {
+                if (rowY + ROW_HEIGHT >= listY && rowY <= listY + listH) {
+                    drawLocalModRow(mod, listX, rowY, listW, listHovered, true);
+                }
+                rowY += ROW_HEIGHT;
             }
-            drawModRow(mods.get(i), installed, listX, rowY, listW, listHovered);
+        }
+
+        rowY = drawSectionHeading("MOD.IO", listX, rowY, listY, listH);
+        for (LocalMod mod : fromModIo) {
+            // Installed from mod.io, but the browser has no row for it (signed out, or it was
+            // taken down): it still belongs in this list rather than among the external mods.
+            if (rowY + ROW_HEIGHT >= listY && rowY <= listY + listH) {
+                drawLocalModRow(mod, listX, rowY, listW, listHovered, false);
+            }
+            rowY += ROW_HEIGHT;
+        }
+        for (ModInfo mod : mods) {
+            if (rowY + ROW_HEIGHT >= listY && rowY <= listY + listH) {
+                drawModRow(mod, installed, listX, rowY, listW, listHovered);
+            }
+            rowY += ROW_HEIGHT;
+        }
+        if (mods.isEmpty() && browserMessage != null && rowY <= listY + listH) {
+            r.text(browserMessage, listX + 4, rowY + 8, 1.5f, Theme.TEXT_MUTED);
         }
         r.popClip();
+    }
+
+    /** A heading between the two lists; returns where the next row goes. */
+    private float drawSectionHeading(String text, float x, float y, float listY, float listH) {
+        if (y + ROW_HEIGHT >= listY && y <= listY + listH) {
+            r.text(text, x + 4, y + 10, 1.25f, Theme.TEXT_MUTED);
+        }
+        return y + ROW_HEIGHT;
+    }
+
+    /**
+     * A mod that only exists on this computer: switch it on, play it, or remove it. There is no
+     * Download button, because there is nowhere to download it from.
+     */
+    private void drawLocalModRow(LocalMod mod, float x, float y, float w, boolean listHovered,
+                                 boolean external) {
+        float rowH = ROW_HEIGHT - 6;
+        boolean hovered = listHovered && ui.isHovered(x, y, w, rowH);
+        r.rect(x, y, w, rowH, hovered ? Theme.ROW_HOVER : Theme.ROW);
+
+        float buttonW = 130;
+        float iconSize = rowH - 20;
+        icons.draw(r, mod, mod.name(), x + 10, y + 10, iconSize);
+        float textX = x + iconSize + 22;
+        float textW = w - buttonW - (textX - x) - 28;
+
+        String kind = mod.isWorld() ? "[world]" : mod.isApi() ? "[API]" : "[mod]";
+        r.text(r.ellipsize(mod.name() + "   " + kind, textW, 2f), textX, y + 8, 2f, Theme.TEXT);
+        r.text(r.ellipsize("version " + mod.version()
+                        + (external ? "  |  installed from a file" : "  |  from mod.io"), textW, 1.25f),
+                textX, y + 30, 1.25f, Theme.TEXT_MUTED);
+        r.text(r.ellipsize(external
+                        ? "Not on mod.io, so other players can't be sent it automatically."
+                        : "Sign in to mod.io to check for updates.", textW, 1.25f),
+                textX, y + 48, 1.25f, Theme.TEXT_MUTED);
+
+        float bx = x + w - buttonW - 12;
+        if (mod.isWorld()) {
+            if (ui.button("Play World", bx, y + 6, buttonW, 26) && listHovered) {
+                playWorld(mod);
+            }
+        } else {
+            boolean enabled = engine.modManager().isEnabled(mod);
+            if (drawEnableButton(enabled ? "Disable" : "Enable", bx, y + 6, buttonW, 26, enabled)
+                    && listHovered) {
+                engine.modManager().setEnabled(mod, !enabled);
+            }
+        }
+        if (ui.button("Remove", bx, y + 36, buttonW, 26) && listHovered) {
+            removeMod(mod);
+        }
+    }
+
+    /** Deletes an installed mod's folder, for mods that came from a file. */
+    private void removeMod(LocalMod mod) {
+        try {
+            engine.modManager().uninstall(mod);
+            icons.dispose();
+            setCreatorNotice("Removed " + mod.name(), false);
+        } catch (IOException e) {
+            setCreatorNotice("Could not remove " + mod.name() + ": " + e.getMessage(), true);
+        }
     }
 
     /** Remote mods whose installed copy is out of date. */

@@ -1,0 +1,8 @@
+{
+  "name": "VR API",
+  "version": "1.0.0",
+  "_comment": "What the headset is allowed to drive. The engine does the work; this says yes to it.",
+  "features": ["stereo", "head_tracking", "hand_tracking", "stick_movement", "snap_turn"],
+  "snapTurnDegrees": 30,
+  "handModel": "cubes"
+}

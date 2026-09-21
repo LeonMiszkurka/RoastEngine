@@ -1,0 +1,8 @@
+{
+  "name": "Quest 2 Controllers",
+  "nameId": "quest2-controller",
+  "version": "1.0.0",
+  "type": "mod",
+  "engine": "RoastEngine 0.1",
+  "description": "Meta Quest 2 Touch controllers for RoastEngine, through the InputEdit API. Left stick walks, right stick turns in steps, right trigger punches and uses, A jumps, the menu button pauses. Runs on top of the InputEdit API and the VR API."
+}

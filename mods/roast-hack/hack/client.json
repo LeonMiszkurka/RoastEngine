@@ -1,0 +1,25 @@
+{
+  "name": "Roast Hack",
+  "version": "1.0.0",
+  "menuKey": "TAB",
+  "tabs": [
+    {"name": "Movement", "cheats": ["fly", "noclip", "infiniteSprint", "speed", "jump", "flySpeed"]},
+    {"name": "View", "cheats": ["thirdPerson", "freecam", "fov", "teleportToLook", "saveSpot", "loadSpot"]},
+    {"name": "World", "cheats": ["neverPassOut", "noFall", "instantDoors", "playerEsp"]},
+    {"name": "Info", "cheats": ["showInfo", "showPing"]}
+  ],
+  "binds": {
+    "fly": "F",
+    "noclip": "N",
+    "thirdPerson": "C",
+    "freecam": "V",
+    "playerEsp": "B",
+    "teleportToLook": "X",
+    "saveSpot": "PAGEUP",
+    "loadSpot": "PAGEDOWN"
+  },
+  "defaults": {
+    "showInfo": 1,
+    "flySpeed": 10
+  }
+}
