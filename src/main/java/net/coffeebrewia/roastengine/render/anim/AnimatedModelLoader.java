@@ -7,6 +7,7 @@ import org.joml.Vector3f;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.assimp.AIAnimation;
 import org.lwjgl.assimp.AIBone;
+import org.lwjgl.assimp.AIColor4D;
 import org.lwjgl.assimp.AIFace;
 import org.lwjgl.assimp.AIMaterial;
 import org.lwjgl.assimp.AIMatrix4x4;
@@ -44,6 +45,10 @@ public final class AnimatedModelLoader {
 
     private static final Vector3f LIGHT_DIRECTION = new Vector3f(0.4f, 0.9f, 0.35f).normalize();
     private static final float AMBIENT = 0.45f;
+    /** How far a node must sit from its rest transform to count as posed. */
+    private static final float POSE_EPSILON = 1e-5f;
+    /** A pose does not move, so its clip is any length; a second reads sensibly in a log. */
+    private static final float POSE_SECONDS = 1f;
 
     private AnimatedModelLoader() {
     }
@@ -72,6 +77,30 @@ public final class AnimatedModelLoader {
         AIScene scene = importScene(file);
         try {
             return readClips(scene, skeleton);
+        } finally {
+            aiReleaseImport(scene);
+        }
+    }
+
+    /**
+     * Loads a single pose out of a file, for a rig exported standing in it rather than animated.
+     *
+     * <p>A pose is the usual way to export "how the body holds something": there is no movement to
+     * key, so the file often arrives with no animation at all and the pose sitting in the node
+     * transforms. A clip is still preferred when the file has one - this only falls back to the
+     * node transforms - and the pose comes out as a one-key clip, which plays like any other.
+     *
+     * <p>Nodes are matched to the given skeleton by name, and one whose transform matches its rest
+     * transform is left out: what is left is the difference from rest, which is the pose.
+     *
+     * @return the pose as a clip, or null when the file holds neither an animation nor a pose -
+     *         a rig exported at rest, which has nothing in it to play
+     */
+    public static AnimationClip loadPose(Path file, Skeleton skeleton, String name) throws IOException {
+        AIScene scene = importScene(file);
+        try {
+            List<AnimationClip> clips = readClips(scene, skeleton);
+            return clips.isEmpty() ? readPose(scene, skeleton, name) : clips.get(0);
         } finally {
             aiReleaseImport(scene);
         }
@@ -204,6 +233,12 @@ public final class AnimatedModelLoader {
             AIVector3D.Buffer uvs = mesh.mTextureCoords(0);
             Texture texture = texturesByMaterial.computeIfAbsent(mesh.mMaterialIndex(),
                     index -> loadTexture(scene, materials, index, file, textures));
+            // An untextured rig - a character built from flat materials, which is what comes out
+            // of Blender unless someone paints one - keeps its material colours. With a texture
+            // the colour comes from the image, so only the shading is baked in.
+            Vector3f baseColor = texture != null || uvs != null
+                    ? new Vector3f(1f, 1f, 1f)
+                    : materialColor(materials, mesh.mMaterialIndex());
 
             int v = 0;
             for (int i = 0; i < vertexCount; i++) {
@@ -223,9 +258,9 @@ public final class AnimatedModelLoader {
                                 * Math.max(0f, normal.normalize().dot(LIGHT_DIRECTION));
                     }
                 }
-                vertices[v++] = shade;
-                vertices[v++] = shade;
-                vertices[v++] = shade;
+                vertices[v++] = baseColor.x * shade;
+                vertices[v++] = baseColor.y * shade;
+                vertices[v++] = baseColor.z * shade;
 
                 if (uvs != null) {
                     AIVector3D uv = uvs.get(i);
@@ -285,6 +320,26 @@ public final class AnimatedModelLoader {
                 min, max, triangles);
     }
 
+    /**
+     * A material's diffuse colour, or white when it has none. Mirrors the static loader, so the
+     * same .glb looks the same whether it is rigged or not.
+     */
+    private static Vector3f materialColor(PointerBuffer materials, int index) {
+        if (materials == null || index < 0 || index >= materials.limit()) {
+            return new Vector3f(1f, 1f, 1f);
+        }
+        AIMaterial material = AIMaterial.create(materials.get(index));
+        AIColor4D color = AIColor4D.create();
+        if (aiGetMaterialColor(material, AI_MATKEY_COLOR_DIFFUSE, aiTextureType_NONE, 0, color)
+                == aiReturn_SUCCESS) {
+            Vector3f result = new Vector3f(color.r(), color.g(), color.b());
+            // Pure black is what an export that relies on a texture leaves behind; white is the
+            // safer reading of it than a model nobody can see.
+            return result.lengthSquared() < 1e-5f ? new Vector3f(1f, 1f, 1f) : result;
+        }
+        return new Vector3f(1f, 1f, 1f);
+    }
+
     private static int boneIndexOf(Skeleton skeleton, String boneName) {
         int node = skeleton.nodeIndex(boneName);
         return node < 0 ? -1 : skeleton.boneIndexOfNode(node);
@@ -317,6 +372,44 @@ public final class AnimatedModelLoader {
                     duration, channels.toArray(new AnimationClip.Channel[0])));
         }
         return clips;
+    }
+
+    /**
+     * The scene's own node transforms as a one-key clip on another rig's skeleton.
+     *
+     * <p>Only nodes that have moved away from their rest transform are keyed, so a file that is
+     * simply the rig at rest - which is what an export taken in Rest Position, or with no
+     * keyframes, comes out as - yields nothing and is reported as having no pose rather than
+     * playing as a pose that does not move anything.
+     */
+    private static AnimationClip readPose(AIScene scene, Skeleton skeleton, String name) {
+        Map<String, Matrix4f> locals = new HashMap<>();
+        collectLocals(scene.mRootNode(), locals);
+
+        List<AnimationClip.Channel> channels = new ArrayList<>();
+        for (Map.Entry<String, Matrix4f> entry : locals.entrySet()) {
+            int node = skeleton.nodeIndex(entry.getKey());
+            if (node < 0 || entry.getValue().equals(skeleton.restTransform(node), POSE_EPSILON)) {
+                continue;
+            }
+            Matrix4f local = entry.getValue();
+            float[] at = {0f};
+            channels.add(new AnimationClip.Channel(node,
+                    at, new Vector3f[]{local.getTranslation(new Vector3f())},
+                    at, new Quaternionf[]{local.getUnnormalizedRotation(new Quaternionf()).normalize()},
+                    at, new Vector3f[]{local.getScale(new Vector3f())}));
+        }
+        return channels.isEmpty() ? null
+                : new AnimationClip(name, POSE_SECONDS, channels.toArray(new AnimationClip.Channel[0]));
+    }
+
+    /** Every node's own local transform, by name, so a pose can be read off the hierarchy. */
+    private static void collectLocals(AINode node, Map<String, Matrix4f> out) {
+        out.putIfAbsent(node.mName().dataString(), toMatrix(node.mTransformation()));
+        PointerBuffer children = node.mChildren();
+        for (int i = 0; i < node.mNumChildren(); i++) {
+            collectLocals(AINode.create(children.get(i)), out);
+        }
     }
 
     private static AnimationClip.Channel readChannel(AINodeAnim nodeAnim, int node, double ticksPerSecond) {

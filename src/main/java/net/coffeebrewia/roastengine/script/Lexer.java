@@ -52,7 +52,9 @@ final class Lexer {
                     add(Token.Kind.NEWLINE, "\\n");
                 }
                 line++;
-                atLineStart = true;
+                // Inside brackets the next line is a continuation, so its indentation means
+                // nothing - and treating it as a line start would close the block it is in.
+                atLineStart = depth == 0;
                 continue;
             }
             if (c == ' ') {

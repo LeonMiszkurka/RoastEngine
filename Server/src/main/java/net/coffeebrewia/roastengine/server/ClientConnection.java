@@ -1,6 +1,8 @@
 package net.coffeebrewia.roastengine.server;
 
 import net.coffeebrewia.roastengine.net.Protocol;
+import net.coffeebrewia.roastengine.net.Protocol.ArenaAction;
+import net.coffeebrewia.roastengine.net.Protocol.ArenaSetup;
 import net.coffeebrewia.roastengine.net.Protocol.ChatSend;
 import net.coffeebrewia.roastengine.net.Protocol.ChooseSession;
 import net.coffeebrewia.roastengine.net.Protocol.StatusRequest;
@@ -10,6 +12,7 @@ import net.coffeebrewia.roastengine.net.Protocol.Move;
 import net.coffeebrewia.roastengine.net.Protocol.Ping;
 import net.coffeebrewia.roastengine.net.Protocol.Pong;
 import net.coffeebrewia.roastengine.net.Protocol.Rejected;
+import net.coffeebrewia.roastengine.net.Protocol.Shoot;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -56,6 +59,11 @@ final class ClientConnection {
 
     /** Set once the server accepts the hello; null until then. */
     volatile String name;
+    /**
+     * Which version of the protocol this player's game speaks, from their hello. What they are sent
+     * is held to what they can understand, so an older game plays on rather than being turned away.
+     */
+    volatile int protocolVersion = Protocol.MIN_VERSION;
     /** Protocol.RANK_*, from the player's account. */
     volatile int rank;
     /** The account's id, or empty when the server runs without accounts. */
@@ -174,6 +182,12 @@ final class ClientConnection {
             server.chat(this, text);
         } else if (message instanceof ChooseSession choice) {
             server.chooseSession(this, choice);
+        } else if (message instanceof Shoot shot) {
+            server.shoot(this, shot);
+        } else if (message instanceof ArenaAction action) {
+            server.arenaAction(this, action);
+        } else if (message instanceof ArenaSetup setup) {
+            server.arenaSetup(this, setup);
         } else if (message instanceof Ping ping) {
             send(new Pong(ping.stamp()));
         }

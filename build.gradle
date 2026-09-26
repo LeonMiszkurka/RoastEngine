@@ -13,6 +13,8 @@ ext {
     lwjglVersion = '3.3.6'
     jomlVersion  = '1.10.7'
     gsonVersion  = '2.11.0'
+    jcodecVersion = '0.2.5'
+    jlayerVersion = '1.0.1'
 }
 
 // ---------------------------------------------------------------------------
@@ -58,6 +60,13 @@ dependencies {
 
     implementation "org.joml:joml:${jomlVersion}"
     implementation "com.google.code.gson:gson:${gsonVersion}"
+
+    // Pure-Java H.264/MP4 decoding, for a world's intro video. No native libraries, so it
+    // plays the same mp4 on every platform the engine already runs on.
+    implementation "org.jcodec:jcodec:${jcodecVersion}"
+
+    // Pure-Java MP3 decoding, so a mod can ship its music as an .mp3 as well as an .ogg.
+    implementation "javazoom:jlayer:${jlayerVersion}"
 
     // Multiplayer messages, shared with the dedicated server.
     implementation project(':Protocol')
@@ -111,7 +120,8 @@ tasks.named('run') {
     ['playerModelOffset', 'playerModelYaw', 'playerModelScale', 'playerModel', 'hands',
      'autoWalk', 'playerHeight', 'startYaw', 'autoInteract', 'spawnAt',
      'headHideRadius', 'sipsToPassOut', 'passOutAt', 'startMenu', 'forceShaders',
-     'modsDir', 'configDir', 'join', 'playerName', 'autoPick', 'server.1.wakeUrl', 'accountsUrl', 'autoChat', 'autoCheats', 'openCheatMenu', 'punchStart', 'punchSeconds'].each { name ->
+     'modsDir', 'configDir', 'join', 'playerName', 'autoPick', 'server.1.wakeUrl', 'accountsUrl', 'autoChat', 'autoCheats', 'openCheatMenu', 'punchStart', 'punchSeconds',
+     'arenaAuto', 'holdBone', 'holdInset'].each { name ->
         if (project.hasProperty(name)) {
             systemProperty "roastengine.${name}", project.property(name)
         }
@@ -526,12 +536,14 @@ set HERE=%~dp0..
 """ }
         def bin = new File(stage, 'bin')
         bin.mkdirs()
-        new File(bin, 'RoastEngine.bat').text = launcher('net.coffeebrewia.roastengine.Main', '')
+        // Windows batch files want CRLF; the launcher text above is written with plain newlines.
+        def batch = { String text -> text.replace('\r\n', '\n').replace('\n', '\r\n') }
+        new File(bin, 'RoastEngine.bat').text = batch(launcher('net.coffeebrewia.roastengine.Main', ''))
         // The VR launcher is the same game with the headset switched on.
         new File(bin, 'RoastEngine VR.bat').text =
-                launcher('net.coffeebrewia.roastengine.Main', '-Droastengine.vr=true')
+                batch(launcher('net.coffeebrewia.roastengine.Main', '-Droastengine.vr=true'))
         new File(bin, 'RoastEngine Creator.bat').text =
-                launcher('net.coffeebrewia.roastengine.creator.CreatorMain', '')
+                batch(launcher('net.coffeebrewia.roastengine.creator.CreatorMain', ''))
         new File(stage, 'Play RoastEngine.bat').text =
                 '@echo off\r\nstart "" "%~dp0bin\\RoastEngine.bat"\r\n'
         new File(stage, 'Play in VR.bat').text =

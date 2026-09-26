@@ -97,6 +97,11 @@ public final class Camera {
         this.yaw = radians;
     }
 
+    /** Tilts the camera up or down, within the usual limits; positive looks down. */
+    public void setPitch(float radians) {
+        this.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, radians));
+    }
+
     public float yaw() {
         return yaw;
     }

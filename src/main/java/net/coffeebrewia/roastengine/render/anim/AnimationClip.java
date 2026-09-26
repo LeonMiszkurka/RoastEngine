@@ -74,9 +74,25 @@ public final class AnimationClip {
             if (channel.node < 0 || channel.node >= outLocal.length) {
                 continue;
             }
-            interpolateVector(channel.positionTimes, channel.positions, t, position);
-            interpolateQuaternion(channel.rotationTimes, channel.rotations, t, rotation);
-            interpolateVector(channel.scaleTimes, channel.scales, t, scale);
+            // A channel need not move all three: glTF allows a rotation-only track, and the
+            // Creator's animator writes exactly that. What a channel leaves out comes from the
+            // rest pose, because taking it as zero would flatten the node to nothing.
+            Matrix4f rest = skeleton.restTransform(channel.node);
+            if (channel.positions.length == 0) {
+                rest.getTranslation(position);
+            } else {
+                interpolateVector(channel.positionTimes, channel.positions, t, position);
+            }
+            if (channel.rotations.length == 0) {
+                rest.getUnnormalizedRotation(rotation).normalize();
+            } else {
+                interpolateQuaternion(channel.rotationTimes, channel.rotations, t, rotation);
+            }
+            if (channel.scales.length == 0) {
+                rest.getScale(scale);
+            } else {
+                interpolateVector(channel.scaleTimes, channel.scales, t, scale);
+            }
             outLocal[channel.node].translationRotateScale(position, rotation, scale);
         }
     }

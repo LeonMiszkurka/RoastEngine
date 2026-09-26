@@ -75,6 +75,15 @@ public final class WorldObject {
     public float scriptRoll;
     /** Walks about and can be punched into a ragdoll. */
     public boolean entity;
+    /** Can be picked up and carried. Set by the scene or by a script's {@code hold_item()}. */
+    public boolean holdable;
+    /** In the player's hands or bag right now: drawn there instead of where it was placed. */
+    public boolean carried;
+    /**
+     * Where the hand closes around it, in the model's own space - a gun's grip. Null means the
+     * middle of the bottom of the model, which is right for anything that stands on its base.
+     */
+    public Vector3f grip;
     /** A script removed it: not drawn, does not block, cannot be interacted with. */
     public boolean removedByScript;
     /** Values the level gave this object's script, from the Creator's inspector. */
@@ -212,7 +221,7 @@ public final class WorldObject {
      * blocked even though it looks open.
      */
     public boolean isSolid() {
-        return collision && !kills && !removedByScript && !(isDoor() && openAmount > 0.25f)
+        return collision && !kills && !removedByScript && !carried && !(isDoor() && openAmount > 0.25f)
                 && npc.isEmpty();
     }
 
@@ -252,6 +261,11 @@ public final class WorldObject {
         if (scriptOffset.lengthSquared() > 0) {
             testMin = probeMin.set(min).sub(scriptOffset);
             testMax = probeMax.set(max).sub(scriptOffset);
+        }
+        // A big level is thousands of boxes; stepping over all of them for something nowhere
+        // near this object is what makes a large map crawl.
+        if (!nearBounds(testMin, testMax)) {
+            return false;
         }
         for (Box box : boxes) {
             if (box.overlaps(testMin, testMax)) {

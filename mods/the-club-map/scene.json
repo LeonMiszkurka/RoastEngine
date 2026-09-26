@@ -136,7 +136,8 @@
       "collision": true,
       "kills": false,
       "slippery": false,
-      "script": ""
+      "script": "",
+      "entity": true
     },
     {
       "id": "guest-2",
@@ -156,7 +157,8 @@
       "collision": true,
       "kills": false,
       "slippery": false,
-      "script": ""
+      "script": "",
+      "entity": true
     },
     {
       "id": "guest-3",
@@ -176,7 +178,8 @@
       "collision": true,
       "kills": false,
       "slippery": false,
-      "script": ""
+      "script": "",
+      "entity": true
     },
     {
       "id": "guest-4",
@@ -196,7 +199,8 @@
       "collision": true,
       "kills": false,
       "slippery": false,
-      "script": ""
+      "script": "",
+      "entity": true
     },
     {
       "id": "guest-5",
@@ -216,7 +220,72 @@
       "collision": true,
       "kills": false,
       "slippery": false,
-      "script": ""
+      "script": "",
+      "entity": true
+    },
+    {
+      "id": "bottle",
+      "name": "Bottle",
+      "asset": "bottle.obj",
+      "position": {
+        "x": -5.6,
+        "y": 1.2,
+        "z": -2.0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": false,
+      "kills": false,
+      "slippery": false,
+      "script": "carry_the_bottle.py"
+    },
+    {
+      "id": "disco-ball",
+      "name": "Disco Ball",
+      "asset": "disco_ball.obj",
+      "position": {
+        "x": 0,
+        "y": 3.4,
+        "z": -9.0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": false,
+      "kills": false,
+      "slippery": false,
+      "script": "disco_ball.py",
+      "scriptParams": {
+        "turn_speed": "45",
+        "bob": "0.25"
+      }
+    },
+    {
+      "id": "house-rules",
+      "name": "House Rules",
+      "asset": "sign.obj",
+      "position": {
+        "x": 2.6,
+        "y": 0,
+        "z": -2.4
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": -150.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": false,
+      "kills": false,
+      "slippery": false,
+      "script": "house_rules.py"
     },
     {
       "id": "beer",

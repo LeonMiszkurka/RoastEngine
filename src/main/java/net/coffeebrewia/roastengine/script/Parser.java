@@ -268,6 +268,9 @@ final class Parser {
                 List<Expr> arguments = new ArrayList<>();
                 if (!checkOperator(")")) {
                     do {
+                        if (checkOperator(")")) {
+                            break; // a comma after the last argument, which Python allows
+                        }
                         arguments.add(expression());
                     } while (matchOperator(","));
                 }
@@ -324,6 +327,9 @@ final class Parser {
                     List<Expr> items = new ArrayList<>();
                     if (!checkOperator("]")) {
                         do {
+                            if (checkOperator("]")) {
+                                break; // a comma after the last item, which Python allows
+                            }
                             items.add(expression());
                         } while (matchOperator(","));
                     }

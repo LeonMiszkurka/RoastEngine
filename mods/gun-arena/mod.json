@@ -1,0 +1,8 @@
+{
+  "name": "Gun Arena",
+  "nameId": "gun-arena",
+  "version": "1.0.0",
+  "type": "world",
+  "engine": "RoastEngine 0.3",
+  "description": "Two teams, two maps, six guns. Vote for a map, pick your loadout, ready up and fight - first to 10 wins. Online for two or more; offline it is a practice range. Needs the PlaceHolder API to carry more than one gun."
+}

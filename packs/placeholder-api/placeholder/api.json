@@ -1,0 +1,6 @@
+{
+  "name": "PlaceHolder API",
+  "version": "1.0.0",
+  "_comment": "How many things the player can carry at once. The engine allows up to 9; 5 is what this version gives.",
+  "slots": 5
+}

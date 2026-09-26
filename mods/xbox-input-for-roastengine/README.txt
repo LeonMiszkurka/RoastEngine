@@ -18,3 +18,16 @@ controller it recognises - so this works on a PlayStation or 8BitDo pad too,
 with the names read positionally (A is the bottom face button).
 
 Keyboard and mouse always stay live; a scheme adds to them.
+
+
+Connect the pad over Bluetooth, not by cable
+--------------------------------------------
+
+An Xbox Series X|S or Xbox One pad on a USB cable talks Microsoft's own
+protocol, and offers no axes or buttons to read at all - so this scheme cannot
+drive it, and no mapping file can fix that. Over Bluetooth the same pad speaks
+the standard layout and works.
+
+To pair: hold the small button on top until the Xbox button flashes quickly,
+then add it in the system's Bluetooth settings. If the pad is connected but the
+game says it has nothing to read, the cable is why.

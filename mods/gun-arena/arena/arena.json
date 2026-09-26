@@ -1,0 +1,240 @@
+{
+  "name": "Gun Arena",
+  "scoreLimit": 10,
+  "maxHealth": 100,
+  "respawnSeconds": 3,
+  "matchSeconds": 300,
+  "minPlayers": 2,
+  "lobby": {
+    "spawn": [
+      0.0,
+      1.7,
+      3.0
+    ],
+    "yaw": 0.0
+  },
+  "maps": [
+    {
+      "name": "Warehouse",
+      "description": "Crates, shelving and a container. Close quarters.",
+      "red": [
+        [
+          181.8,
+          1.7,
+          -5.0,
+          90.0
+        ],
+        [
+          181.8,
+          1.7,
+          0.0,
+          90.0
+        ],
+        [
+          181.8,
+          1.7,
+          5.0,
+          90.0
+        ]
+      ],
+      "blue": [
+        [
+          218.2,
+          1.7,
+          -5.0,
+          270.0
+        ],
+        [
+          218.2,
+          1.7,
+          0.0,
+          270.0
+        ],
+        [
+          218.2,
+          1.7,
+          5.0,
+          270.0
+        ]
+      ]
+    },
+    {
+      "name": "Courtyard",
+      "description": "Open sky, a fountain and long sightlines.",
+      "red": [
+        [
+          -216.6,
+          1.7,
+          -6.0,
+          90.0
+        ],
+        [
+          -216.6,
+          1.7,
+          0.0,
+          90.0
+        ],
+        [
+          -216.6,
+          1.7,
+          6.0,
+          90.0
+        ]
+      ],
+      "blue": [
+        [
+          -183.4,
+          1.7,
+          -6.0,
+          270.0
+        ],
+        [
+          -183.4,
+          1.7,
+          0.0,
+          270.0
+        ],
+        [
+          -183.4,
+          1.7,
+          6.0,
+          270.0
+        ]
+      ]
+    }
+  ],
+  "guns": [
+    {
+      "id": "pistol",
+      "name": "Pistol",
+      "object": "Pistol",
+      "grip": [
+        0,
+        0,
+        0
+      ],
+      "description": "Reliable backup. Quick to draw, quick to fire.",
+      "damage": 25,
+      "fireRate": 5.0,
+      "automatic": false,
+      "magazine": 12,
+      "reloadSeconds": 1.1,
+      "range": 60,
+      "spread": 0.8,
+      "pellets": 1,
+      "recoil": 1.2,
+      "headshot": 1.6,
+      "pitch": 1.25
+    },
+    {
+      "id": "revolver",
+      "name": "Revolver",
+      "object": "Revolver",
+      "grip": [
+        0,
+        0,
+        0
+      ],
+      "description": "Six shots. Make them count.",
+      "damage": 55,
+      "fireRate": 1.6,
+      "automatic": false,
+      "magazine": 6,
+      "reloadSeconds": 2.2,
+      "range": 80,
+      "spread": 0.4,
+      "pellets": 1,
+      "recoil": 3.5,
+      "headshot": 1.6,
+      "pitch": 0.95
+    },
+    {
+      "id": "smg",
+      "name": "SMG",
+      "object": "SMG",
+      "grip": [
+        0,
+        0,
+        0
+      ],
+      "description": "Sprays fast up close, drifts at range.",
+      "damage": 14,
+      "fireRate": 13.0,
+      "automatic": true,
+      "magazine": 32,
+      "reloadSeconds": 1.6,
+      "range": 45,
+      "spread": 2.4,
+      "pellets": 1,
+      "recoil": 0.5,
+      "headshot": 1.4,
+      "pitch": 1.35
+    },
+    {
+      "id": "rifle",
+      "name": "Assault Rifle",
+      "object": "Assault Rifle",
+      "grip": [
+        0,
+        0,
+        0
+      ],
+      "description": "Good at everything, best at nothing.",
+      "damage": 22,
+      "fireRate": 9.0,
+      "automatic": true,
+      "magazine": 30,
+      "reloadSeconds": 2.0,
+      "range": 90,
+      "spread": 1.2,
+      "pellets": 1,
+      "recoil": 0.8,
+      "headshot": 1.5,
+      "pitch": 1.05
+    },
+    {
+      "id": "shotgun",
+      "name": "Shotgun",
+      "object": "Shotgun",
+      "grip": [
+        0,
+        0,
+        0
+      ],
+      "description": "Eight pellets. Devastating across a room, useless across a map.",
+      "damage": 14,
+      "fireRate": 1.2,
+      "automatic": false,
+      "magazine": 6,
+      "reloadSeconds": 2.6,
+      "range": 30,
+      "spread": 6.0,
+      "pellets": 8,
+      "recoil": 5.0,
+      "headshot": 1.25,
+      "pitch": 0.8
+    },
+    {
+      "id": "sniper",
+      "name": "Sniper Rifle",
+      "object": "Sniper Rifle",
+      "grip": [
+        0,
+        0,
+        0
+      ],
+      "description": "A headshot is a kill. So is patience.",
+      "damage": 90,
+      "fireRate": 0.7,
+      "automatic": false,
+      "magazine": 5,
+      "reloadSeconds": 2.8,
+      "range": 200,
+      "spread": 0.05,
+      "pellets": 1,
+      "recoil": 6.0,
+      "headshot": 2.0,
+      "pitch": 0.7
+    }
+  ]
+}

@@ -29,6 +29,7 @@ public final class Gamepads {
     public static final class Device {
         private final int slot;
         private String name = "";
+        private String guid = "";
         private boolean present;
         private boolean gamepad;
         private float[] axes = new float[0];
@@ -45,6 +46,14 @@ public final class Gamepads {
 
         public String name() {
             return name;
+        }
+
+        /**
+         * The device's hardware id, the same one SDL's controller database is keyed by. It is what
+         * a mapping for an unrecognised pad has to start with, so it is worth printing.
+         */
+        public String guid() {
+            return guid;
         }
 
         /** True when GLFW has a button mapping for this device, so the layout is known. */
@@ -72,6 +81,18 @@ public final class Gamepads {
         public int buttonCount() {
             return buttons.length;
         }
+
+        /**
+         * True when the device is there but offers nothing to read: no axes, no buttons.
+         *
+         * <p>This is a pad talking its maker's own protocol rather than the standard one - an Xbox
+         * pad on a USB cable does exactly this, exposing only vendor-defined reports. No mapping
+         * can help, because a mapping names axes and buttons and there are none. The same pad over
+         * Bluetooth speaks the standard layout and works.
+         */
+        public boolean hasNothingToRead() {
+            return present && axes.length == 0 && buttons.length == 0;
+        }
     }
 
     private final Device[] devices = new Device[SLOTS];
@@ -93,6 +114,7 @@ public final class Gamepads {
                 if (wasPresent) {
                     System.out.println("[Input] Controller disconnected from slot " + device.slot);
                     device.name = "";
+                    device.guid = "";
                     device.gamepad = false;
                     device.axes = new float[0];
                     device.buttons = new boolean[0];
@@ -111,12 +133,34 @@ public final class Gamepads {
 
             String name = device.gamepad ? glfwGetGamepadName(device.slot) : glfwGetJoystickName(device.slot);
             device.name = name == null ? "Controller " + device.slot : name;
+            String guid = glfwGetJoystickGUID(device.slot);
+            device.guid = guid == null ? "" : guid;
             if (!wasPresent) {
                 System.out.println("[Input] Controller connected: " + device.name
                         + (device.gamepad ? " (gamepad layout)" : " (raw joystick, "
-                        + device.axisCount() + " axes, " + device.buttonCount() + " buttons)"));
+                        + device.axisCount() + " axes, " + device.buttonCount() + " buttons)")
+                        + " id " + device.guid);
+                if (!device.gamepad) {
+                    System.out.println("[Input] " + advice(device));
+                }
             }
         }
+    }
+
+    /**
+     * What to do about a controller the game cannot read. The two causes need opposite answers, and
+     * telling them apart is the difference between a fix and an afternoon wasted.
+     */
+    public static String advice(Device device) {
+        if (device.hasNothingToRead()) {
+            return device.name() + " is connected but offers no axes or buttons at all. A pad on a "
+                    + "USB cable often talks its maker's own protocol, which cannot be read this "
+                    + "way - connect it over Bluetooth instead and it speaks the standard layout. "
+                    + "(id " + device.guid() + ")";
+        }
+        return "No pad layout is known for " + device.name() + " (" + device.axisCount()
+                + " axes, " + device.buttonCount() + " buttons). Add a line for " + device.guid()
+                + " to the InputEdit API's inputedit/mappings.txt to play with it.";
     }
 
     private void readGamepad(Device device) {

@@ -10,6 +10,8 @@ public enum InputButton {
     JUMP("jump"),
     SPRINT("sprint"),
     INTERACT("interact"),
+    /** Puts down whatever the player is holding. */
+    DROP("drop"),
     /** Opens the pause menu, and backs out of it again. */
     PAUSE("pause");
 

@@ -195,6 +195,7 @@ public final class LauncherState implements GameState {
         return switch (project.type()) {
             case API -> new ApiEditorState(engine, project);
             case SHADERS -> new ShaderEditorState(engine, project);
+            case RIG -> new AnimatorState(engine, project);
             default -> new EditorState(engine, project);
         };
     }

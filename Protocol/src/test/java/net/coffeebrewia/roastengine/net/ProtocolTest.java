@@ -22,11 +22,14 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProtocolTest {
 
@@ -78,14 +81,64 @@ class ProtocolTest {
 
     @Test
     void rejectsBadFrames() {
-        // Unknown type.
-        assertThrows(IOException.class, () -> Protocol.read(stream(0, 1, 99)));
         // Zero length.
         assertThrows(IOException.class, () -> Protocol.read(stream(0, 0)));
         // Longer than allowed, refused before anything is allocated.
         assertThrows(IOException.class, () -> Protocol.read(stream(0xFF, 0xFF)));
         // A move frame cut short inside its own length.
         assertThrows(IOException.class, () -> Protocol.read(stream(0, 3, 6, 0, 0)));
+    }
+
+    @Test
+    void readsPastAMessageFromANewerBuildInsteadOfBreakingTheStream() throws IOException {
+        // A frame carries its length, so a type this build has never heard of can be dropped.
+        // This is what lets an older game and a newer server stay on the same connection.
+        assertEquals(new Protocol.Unknown(99), Protocol.read(stream(0, 1, 99)));
+
+        // And the message after it still reads, which is the part that matters.
+        java.io.ByteArrayOutputStream both = new java.io.ByteArrayOutputStream();
+        both.write(new byte[]{0, 3, 99, 7, 7});                 // something from the future
+        both.write(Protocol.encode(new Protocol.Ping(1234L)));  // something we know
+        DataInputStream in = new DataInputStream(new java.io.ByteArrayInputStream(both.toByteArray()));
+        assertEquals(new Protocol.Unknown(99), Protocol.read(in));
+        assertEquals(new Protocol.Ping(1234L), Protocol.read(in));
+    }
+
+    @Test
+    void anUnknownMessageIsNeverSent() {
+        assertThrows(IllegalArgumentException.class,
+                () -> Protocol.encode(new Protocol.Unknown(99)));
+    }
+
+    @Test
+    void versionsGetAlongFromTheFloorUp() {
+        assertTrue(Protocol.canTalkTo(Protocol.VERSION));
+        assertTrue(Protocol.canTalkTo(Protocol.MIN_VERSION));
+        assertTrue(Protocol.canTalkTo(Protocol.VERSION + 1), "a newer game is welcome too");
+        assertFalse(Protocol.canTalkTo(Protocol.MIN_VERSION - 1), "older than the floor is not");
+        assertTrue(Protocol.supportsArena(Protocol.VERSION));
+        assertFalse(Protocol.supportsArena(Protocol.ARENA_VERSION - 1),
+                "a server from before arenas cannot referee one");
+    }
+
+    @Test
+    void aHelloFromAnUnknownShapeStillGivesUpItsVersion() throws IOException {
+        // The version is written first for exactly this reason: whatever follows it, the number
+        // that decides whether the conversation can go on is always readable.
+        java.io.ByteArrayOutputStream body = new java.io.ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(body);
+        out.writeByte(1);          // HELLO
+        out.writeInt(99);          // a version from far in the future
+        out.writeByte(0xAB);       // and then something that is not two strings
+        byte[] frame = body.toByteArray();
+        java.io.ByteArrayOutputStream whole = new java.io.ByteArrayOutputStream();
+        whole.write(0);
+        whole.write(frame.length);
+        whole.write(frame);
+
+        Protocol.Message read = Protocol.read(
+                new DataInputStream(new java.io.ByteArrayInputStream(whole.toByteArray())));
+        assertEquals(99, ((Protocol.Hello) read).version());
     }
 
     @Test

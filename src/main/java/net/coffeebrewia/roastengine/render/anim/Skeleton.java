@@ -48,6 +48,11 @@ public final class Skeleton {
         return nodeNames.length;
     }
 
+    /** The node this one hangs off, or -1 for a root. Lets a tool draw the skeleton. */
+    public int nodeParent(int index) {
+        return index >= 0 && index < nodeParents.length ? nodeParents[index] : -1;
+    }
+
     public int boneCount() {
         return boneCount;
     }
@@ -91,6 +96,25 @@ public final class Skeleton {
                 globalInverse.mul(scratchWorld[node], outPalette[bone]).mul(boneOffsets[bone]);
             }
         }
+    }
+
+    /**
+     * Where one node has ended up in model space, for hanging something off a bone - a held
+     * item in the hand, say.
+     *
+     * <p>This is not the skinning matrix: that one takes a vertex from its bind pose to the
+     * posed one, so it moves vertices rather than describing where the bone <em>is</em>. This is
+     * the bone's own transform, which is what an attachment wants.
+     *
+     * @param scratchWorld the world transforms filled in by the last {@link #buildPalette} call
+     * @return {@code out}, or null when the model has no node by that name
+     */
+    public Matrix4f nodeModelTransform(String name, Matrix4f[] scratchWorld, Matrix4f out) {
+        int node = nodeIndex(name);
+        if (node < 0) {
+            return null;
+        }
+        return globalInverse.mul(scratchWorld[node], out);
     }
 
     /** A palette with every bone left in its rest pose, for models with no animation playing. */

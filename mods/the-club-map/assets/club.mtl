@@ -127,6 +127,30 @@ Ke 0.000 0.000 0.000
 d 0.35
 illum 1
 
+newmtl mirror
+Kd 0.880 0.900 0.960
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.0
+illum 1
+
+newmtl sign
+Kd 0.120 0.100 0.160
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.0
+illum 1
+
+newmtl sign_neon
+Kd 0.350 1.000 0.850
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.0
+illum 1
+
 newmtl beer
 Kd 0.850 0.600 0.120
 Ka 0 0 0

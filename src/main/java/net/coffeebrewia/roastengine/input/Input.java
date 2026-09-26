@@ -118,6 +118,23 @@ public final class Input {
         return button >= 0 && button < BUTTON_COUNT && buttonsPressed[button];
     }
 
+    /**
+     * True when any key or mouse button went down this frame - "press anything to skip".
+     */
+    public boolean wasAnythingPressed() {
+        for (boolean pressed : keysPressed) {
+            if (pressed) {
+                return true;
+            }
+        }
+        for (boolean pressed : buttonsPressed) {
+            if (pressed) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Printable characters typed this frame. */
     public String typedText() {
         return typedChars.toString();

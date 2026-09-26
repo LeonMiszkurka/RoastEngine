@@ -30,6 +30,9 @@ MATERIALS = {
     "stool":      (0.55, 0.20, 0.24),
     "table":      (0.40, 0.34, 0.32),
     "glass":      (0.80, 0.86, 0.90),
+    "mirror":     (0.88, 0.90, 0.96),
+    "sign":       (0.12, 0.10, 0.16),
+    "sign_neon":  (0.35, 1.00, 0.85),
     "beer":       (0.85, 0.60, 0.12),
     "wine":       (0.55, 0.10, 0.18),
     "cola":       (0.25, 0.12, 0.06),
@@ -211,6 +214,31 @@ def build_janitor(b):
     b.box("cap", (0, 1.9, 0.03), (0.3, 0.08, 0.34))
 
 
+def build_disco_ball(b):
+    """A faceted ball on a short chain: eight mirrored slabs around a core."""
+    b.box("trim", (0, 0.55, 0), (0.04, 1.1, 0.04))          # the chain up to the ceiling
+    b.box("mirror", (0, 0, 0), (0.34, 0.34, 0.34))          # the core
+    for i in range(8):
+        angle = math.tau * i / 8
+        x, z = math.cos(angle) * 0.2, math.sin(angle) * 0.2
+        b.box("mirror", (x, 0, z), (0.16, 0.26, 0.16))      # the facets that catch the light
+
+
+def build_sign(b):
+    """A small board on a post, lit along the top."""
+    b.box("trim", (0, 0.6, 0), (0.06, 1.2, 0.06))
+    b.box("sign", (0, 1.35, 0), (0.9, 0.5, 0.05))
+    b.box("sign_neon", (0, 1.62, 0), (0.94, 0.05, 0.07))
+
+
+def build_bottle(b):
+    """A bottle standing on its base, so it sits in the fist the right way up."""
+    b.cylinder("bottle_a", (0, 0.11, 0), 0.043, 0.22)
+    b.cylinder("bottle_a", (0, 0.24, 0), 0.030, 0.06)
+    b.cylinder("bottle_a", (0, 0.31, 0), 0.018, 0.09)
+    b.cylinder("trim", (0, 0.36, 0), 0.020, 0.02)
+
+
 def build_glass(b):
     b.cylinder("glass", (0, 0, 0), 0.05, 0.16)
 
@@ -218,6 +246,59 @@ def build_glass(b):
 def build_liquid(b):
     """Unit-height liquid: the engine scales it down as the drink is drunk."""
     b.cylinder("beer", (0, 0, 0), 0.045, 1.0)
+
+
+DISCO_BALL_SCRIPT = """\
+# The disco ball over the dance floor.
+#
+# turn_speed and bob are script values on the object, so a second ball hung somewhere
+# else can turn at its own speed without this script being copied.
+
+
+def on_start():
+    self.spin(param("turn_speed", 45))
+    every(4, dip)
+
+
+def dip():
+    self.move_to(self.x, self.y - param("bob", 0.25), self.z, 2)
+    after(2, lift)
+
+
+def lift():
+    self.move_to(self.x, self.y + param("bob", 0.25), self.z, 2)
+"""
+
+CARRY_SCRIPT = """\
+# What the player can pick up.
+#
+# The name is the one the level calls it - the same name the Creator shows in its list of
+# objects down the side. Say it here and the player can pick that object up with E, carry it
+# around and put it down again with Q.
+
+item = "Bottle"
+hold_item(item)
+"""
+
+HOUSE_RULES_SCRIPT = """\
+# The sign by the door. It has opinions about how you treat the guests.
+
+
+def on_start():
+    self.near_distance = 4
+
+
+def on_player_near():
+    notice(pick([
+        "House rules: mind the guests.",
+        "House rules: the guests do not mind you.",
+        "House rules: what goes on the floor stays on the floor.",
+    ]))
+
+
+def on_interact():
+    say("The sign is bolted down. The guests are not.")
+"""
 
 
 def main():
@@ -233,6 +314,9 @@ def main():
         "glass.obj": build_glass,
         "liquid.obj": build_liquid,
         "janitor.obj": build_janitor,
+        "disco_ball.obj": build_disco_ball,
+        "sign.obj": build_sign,
+        "bottle.obj": build_bottle,
     }
     for name, builder in pieces.items():
         b = ObjBuilder()
@@ -247,7 +331,8 @@ def main():
         b.write(os.path.join(assets, f"person_{i}.obj"), "club.mtl")
 
     def obj(name, asset, x, y, z, yaw=0.0, scale=1.0, collision=True,
-            interaction="", fill=0.0, label="", npc=""):
+            interaction="", fill=0.0, label="", npc="", entity=False, script="",
+            script_params=None):
         entry = {
             "id": name.lower().replace(" ", "-"),
             "name": name,
@@ -258,8 +343,12 @@ def main():
             "collision": collision,
             "kills": False,
             "slippery": False,
-            "script": "",
+            "script": script,
         }
+        if entity:
+            entry["entity"] = True
+        if script_params:
+            entry["scriptParams"] = script_params
         if interaction:
             entry["interaction"] = interaction
             entry["fill"] = fill
@@ -287,11 +376,24 @@ def main():
     # The janitor only appears after you pass out, wherever you fell.
     objects.append(obj("Janitor", "janitor.obj", 0, 0, -8, collision=False, npc="janitor"))
 
-    # People around the room.
+    # People around the room. They are entities: they wander off on their own, and a punch
+    # (E, or the trigger in VR) sends them tumbling.
     placements = [(-3.2, -6.0, 200), (-3.4, -10.5, 160), (2.0, -5.0, 20),
                   (4.8, -9.5, 300), (1.6, -13.5, 90)]
     for i, (x, z, yaw) in enumerate(placements):
-        objects.append(obj(f"Guest {i + 1}", f"person_{i}.obj", x, 0, z, yaw=yaw, collision=True))
+        objects.append(obj(f"Guest {i + 1}", f"person_{i}.obj", x, 0, z, yaw=yaw,
+                           collision=True, entity=True))
+
+    # A bottle on the end of the bar that you can pick up and carry off. What makes it holdable
+    # is the script, not the scene - which is the shape a mod's own items are written in.
+    objects.append(obj("Bottle", "bottle.obj", -5.6, 1.2, -2.0, collision=False,
+                       script="carry_the_bottle.py"))
+
+    # The disco ball turns above the floor, and the sign by the door warns you about the guests.
+    objects.append(obj("Disco Ball", "disco_ball.obj", 0, 3.4, -9.0, collision=False,
+                       script="disco_ball.py", script_params={"turn_speed": "45", "bob": "0.25"}))
+    objects.append(obj("House Rules", "sign.obj", 2.6, 0, -2.4, yaw=-150.0, collision=False,
+                       script="house_rules.py"))
 
     # Drinks on the bar: each is a glass plus the liquid inside it.
     drinks = [("Beer", -12.0), ("Cocktail", -9.5), ("Cola", -7.0), ("Wine", -4.5)]
@@ -307,6 +409,14 @@ def main():
         "spawn": [0.0, 1.7, 13.0],
         "objects": objects,
     }
+    scripts = os.path.join(out_dir, "scripts")
+    os.makedirs(scripts, exist_ok=True)
+    for name, source in (("disco_ball.py", DISCO_BALL_SCRIPT),
+                         ("house_rules.py", HOUSE_RULES_SCRIPT),
+                         ("carry_the_bottle.py", CARRY_SCRIPT)):
+        with open(os.path.join(scripts, name), "w") as f:
+            f.write(source)
+
     with open(os.path.join(out_dir, "scene.json"), "w") as f:
         json.dump(scene, f, indent=2)
 
@@ -314,13 +424,16 @@ def main():
         json.dump({
             "name": "The Club",
             "nameId": "the-club",
-            "version": "1.0.0",
+            "version": "1.2.0",
             "type": "world",
             "engine": "RoastEngine 0.1",
-            "description": "A hallway, a door to open, a club full of people, and drinks you can sip.",
+            "description": "A hallway, a door to open, a club full of people you can punch, "
+                           "drinks you can sip, a bottle you can carry off, and a disco ball "
+                           "that will not stop turning.",
         }, f, indent=2)
 
-    print(f"Wrote {out_dir}: {len(objects)} objects, {len(pieces) + len(people)} meshes")
+    print(f"Wrote {out_dir}: {len(objects)} objects, {len(pieces) + len(people)} meshes, "
+          f"{len(os.listdir(scripts))} scripts")
 
 
 if __name__ == "__main__":

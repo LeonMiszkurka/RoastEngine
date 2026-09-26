@@ -1,0 +1,17 @@
+# Pad layouts for controllers GLFW does not recognise.
+#
+# GLFW ships layouts for the common controllers, and a "device": "gamepad" scheme only works on a
+# pad it can place. If the game says a controller is connected but no scheme can read it, it prints
+# that pad's id - add a line for it here and restart, or switch the InputEdit API off and on again.
+#
+# One mapping per line, in SDL's game controller database format:
+#
+#   <id>,<name>,a:b0,b:b1,x:b2,y:b3,leftshoulder:b4,rightshoulder:b5,back:b6,start:b7,guide:b8,
+#   leftstick:b9,rightstick:b10,dpup:b11,dpright:b12,dpdown:b13,dpleft:b14,
+#   leftx:a0,lefty:a1,rightx:a2,righty:a3,lefttrigger:a4,righttrigger:a5,platform:Mac OS X
+#
+# The id is the 32-character one the game printed. `platform:` must match the machine it is for
+# (Mac OS X, Windows or Linux), so a pad used on two machines wants a line for each. Ready-made
+# lines for hundreds of controllers are in SDL's own database, which uses this exact format.
+#
+# Lines starting with # are ignored, so this file can be left as it is.

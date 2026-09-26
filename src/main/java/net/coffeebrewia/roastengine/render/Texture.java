@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.lwjgl.opengl.GL11C.*;
+import static org.lwjgl.opengl.GL12C.GL_CLAMP_TO_EDGE;
 import static org.lwjgl.opengl.GL30C.glGenerateMipmap;
 
 /** A 2D OpenGL texture decoded with stb_image. Must be created on the main thread. */
@@ -95,6 +96,34 @@ public final class Texture {
         glGenerateMipmap(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, 0);
         return new Texture(id, width, height);
+    }
+
+    /**
+     * An empty texture whose pixels are replaced every frame, as a video does.
+     *
+     * <p>No mipmaps: they would be rebuilt on every upload for no gain, since a video is drawn at
+     * roughly its own size. Clamped rather than repeated so the edge row cannot bleed around.
+     */
+    public static Texture streaming(int width, int height) {
+        int id = glGenTextures();
+        glBindTexture(GL_TEXTURE_2D, id);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                (ByteBuffer) null);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        return new Texture(id, width, height);
+    }
+
+    /** Replaces the pixels of a {@link #streaming} texture. The buffer must hold width*height RGBA. */
+    public void updateRgba(ByteBuffer rgba) {
+        glBindTexture(GL_TEXTURE_2D, id);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+        glBindTexture(GL_TEXTURE_2D, 0);
     }
 
     public void bind(int unit) {

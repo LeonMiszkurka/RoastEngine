@@ -8,6 +8,7 @@ import org.lwjgl.stb.STBVorbis;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
@@ -95,15 +96,44 @@ public final class AudioEngine {
     }
 
     /**
-     * Replaces a built-in sound with an Ogg Vorbis file, if it exists. This is how a mod ships
-     * its own music or effects: {@code assets/sounds/<name>.ogg}.
+     * Replaces a built-in sound with a file from a mod, if it exists. This is how a mod ships its
+     * own music or effects: {@code assets/sounds/<name>.ogg}, or an {@code .mp3}, which is what
+     * music usually arrives as.
      *
      * @return true when the file was loaded
      */
-    public boolean overrideFromFile(String name, Path oggFile) {
-        if (!available || !Files.isRegularFile(oggFile)) {
+    public boolean overrideFromFile(String name, Path file) {
+        if (!available || !Files.isRegularFile(file)) {
             return false;
         }
+        return file.getFileName().toString().toLowerCase().endsWith(".mp3")
+                ? loadMp3(name, file)
+                : loadOgg(name, file);
+    }
+
+    /** Decoded in Java rather than by stb_vorbis, but it ends up in the same kind of buffer. */
+    private boolean loadMp3(String name, Path file) {
+        Mp3.Pcm pcm;
+        try {
+            pcm = Mp3.decode(file);
+        } catch (IOException e) {
+            System.err.println("[Audio] " + e.getMessage());
+            return false;
+        }
+        ShortBuffer data = MemoryUtil.memAllocShort(pcm.samples().length);
+        try {
+            data.put(pcm.samples()).flip();
+            upload(name, data, pcm.channels(), pcm.sampleRate());
+        } finally {
+            MemoryUtil.memFree(data);
+        }
+        System.out.println("[Audio] " + name + " <- " + file.getFileName()
+                + " (" + Math.round(pcm.seconds()) + "s, "
+                + (pcm.channels() == 2 ? "stereo" : "mono") + " " + pcm.sampleRate() + "Hz)");
+        return true;
+    }
+
+    private boolean loadOgg(String name, Path oggFile) {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             IntBuffer channels = stack.mallocInt(1);
             IntBuffer sampleRate = stack.mallocInt(1);

@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -198,5 +199,31 @@ class ScriptTest {
         ScriptError unknown = assertThrows(ScriptError.class, () ->
                 interpreter.run(Parser.parse("door.explode()")));
         assertTrue(unknown.getMessage().contains("nothing called 'explode'"), unknown.getMessage());
+    }
+
+    @Test
+    void readsAListSpreadOverSeveralLines() {
+        assertNull(Script.check("""
+                def on_start():
+                    words = [
+                        "one",
+                        "two"
+                    ]
+                    print(len(words))
+                """));
+    }
+
+    @Test
+    void allowsATrailingCommaInListsAndCalls() {
+        assertNull(Script.check("""
+                def on_start():
+                    words = [
+                        "one",
+                        "two",
+                    ]
+                    print(
+                        len(words),
+                    )
+                """));
     }
 }

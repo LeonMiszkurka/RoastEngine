@@ -1,8 +1,8 @@
 {
   "name": "The Club",
   "nameId": "the-club",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "type": "world",
   "engine": "RoastEngine 0.1",
-  "description": "A hallway, a door to open, a club full of people, and drinks you can sip."
+  "description": "A hallway, a door to open, a club full of people you can punch, drinks you can sip, a bottle you can carry off, and a disco ball that will not stop turning."
 }

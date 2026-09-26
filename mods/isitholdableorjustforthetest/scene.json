@@ -1,0 +1,47 @@
+{
+  "name": "main",
+  "skyColor": [
+    0.53,
+    0.78,
+    0.95
+  ],
+  "music": "",
+  "groundPlatform": true,
+  "objects": [
+    {
+      "id": "d09b5407-f2c3-4f45-911a-cf01631895dc",
+      "name": "mainitem",
+      "asset": "free_-_desolate_devil_scythe_gameready.glb",
+      "position": {
+        "x": 4.69,
+        "y": 1.85,
+        "z": 19.36
+      },
+      "rotation": {
+        "x": 24.19,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "interaction": "",
+      "fill": 1.0,
+      "npc": "",
+      "entity": false,
+      "holdable": false,
+      "label": "",
+      "script": "holdscript.py",
+      "scriptParams": {},
+      "scriptEvents": [],
+      "animation": {
+        "type": "none",
+        "speed": 45.0,
+        "amount": 1.0,
+        "axis": "y",
+        "delay": 0.0
+      }
+    }
+  ]
+}

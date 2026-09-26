@@ -847,6 +847,255 @@ def write_mod_icon(draw_fn, folders, size=256):
         print(f"wrote {os.path.relpath(path, PROJECT)}  ({size}x{size})")
 
 
+# --- PlaceHolder API: the bag -------------------------------------------------------
+
+TEAL = (92, 226, 200)
+TEAL_DIM = (32, 116, 102)
+SLOT = (40, 46, 52)
+SLOT_DARK = (24, 28, 33)
+
+
+def draw_placeholder(w, h, wordmark=True):
+    """A row of slots with one lit and holding something: five things, one hand."""
+    unit = min(w, h)
+    base = vertical_gradient(w, h, (16, 28, 30), (5, 9, 11))
+    lit = radial_falloff(w, h, w / 2, h * 0.46, unit * 0.80)
+    base = Image.fromarray(
+        np.clip(np.asarray(base, float) + lit[:, :, None] * np.array([10, 34, 30], float), 0, 255)
+        .astype(np.uint8), "RGB")
+    emissive = Image.new("RGB", (w, h), (0, 0, 0))
+    bd, ed = ImageDraw.Draw(base), ImageDraw.Draw(emissive)
+
+    slots = 5
+    chosen = 2
+    size = unit * 0.155
+    gap = unit * 0.028
+    total = slots * size + (slots - 1) * gap
+    x0 = w / 2 - total / 2
+    y0 = h * 0.50 - size / 2
+    radius = unit * 0.022
+
+    for i in range(slots):
+        x = x0 + i * (size + gap)
+        box = (x, y0, x + size, y0 + size)
+        bd.rounded_rectangle(box, radius=radius, fill=SLOT if i == chosen else SLOT_DARK)
+        if i == chosen:
+            # The slot in the player's hand: outlined, and glowing.
+            bd.rounded_rectangle(box, radius=radius, outline=TEAL, width=max(1, int(unit * 0.010)))
+            ed.rounded_rectangle(box, radius=radius, outline=TEAL, width=max(1, int(unit * 0.010)))
+        else:
+            bd.rounded_rectangle(box, radius=radius, outline=(52, 60, 66),
+                                 width=max(1, int(unit * 0.005)))
+
+    # In the lit slot, the item: a bottle, held by its base.
+    cx = x0 + chosen * (size + gap) + size / 2
+    body_w = size * 0.30
+    body_top = y0 + size * 0.34
+    body_bottom = y0 + size * 0.80
+    bd.rounded_rectangle((cx - body_w, body_top, cx + body_w, body_bottom),
+                         radius=body_w * 0.5, fill=TEAL)
+    ed.rounded_rectangle((cx - body_w, body_top, cx + body_w, body_bottom),
+                         radius=body_w * 0.5, fill=TEAL)
+    neck_w = size * 0.11
+    bd.rectangle((cx - neck_w, y0 + size * 0.18, cx + neck_w, body_top + size * 0.04), fill=TEAL)
+    ed.rectangle((cx - neck_w, y0 + size * 0.18, cx + neck_w, body_top + size * 0.04), fill=TEAL)
+
+    # The fist closed around its base: the item's bottom sits inside the hand.
+    hand_w = size * 0.62
+    hand_h = size * 0.30
+    hand_y = body_bottom - hand_h * 0.55
+    bd.rounded_rectangle((cx - hand_w, hand_y, cx + hand_w, hand_y + hand_h),
+                         radius=hand_h * 0.42, fill=(228, 186, 148))
+    for knuckle in range(3):
+        kx = cx - hand_w * 0.52 + knuckle * hand_w * 0.52
+        bd.line((kx, hand_y + hand_h * 0.30, kx, hand_y + hand_h * 0.82),
+                fill=(196, 152, 116), width=max(1, int(unit * 0.006)))
+
+    # The number under each slot, so the row reads as a hotbar.
+    label = font(unit * 0.042, FONT_BOLD)
+    for i in range(slots):
+        x = x0 + i * (size + gap) + size / 2
+        text = str(i + 1)
+        half = bd.textlength(text, font=label) / 2
+        bd.text((x - half, y0 + size + unit * 0.030), text, font=label,
+                fill=TEAL if i == chosen else (96, 108, 114))
+
+    art = finish(base, emissive, unit, bloom_strength=0.8, vignette_strength=0.5, seed=73)
+
+    if wordmark:
+        d = ImageDraw.Draw(art)
+        title = font(unit * 0.100, FONT_CONDENSED_BLACK)
+        kicker = font(unit * 0.034)
+        tracking = unit * 0.020
+        cx = w / 2
+        title_y = h * 0.875
+        tracked_text(d, cx, h * 0.810, "FIVE SLOTS, TWO HANDS", kicker, (146, 172, 168), unit * 0.022)
+        tracked_text(d, cx, title_y, "PLACEHOLDER", title, (238, 250, 248), tracking)
+        rule_half = tracked_width(d, "PLACEHOLDER", title, tracking) / 2
+        rule_y = title_y + unit * 0.058
+        d.line((cx - rule_half, rule_y, cx + rule_half, rule_y), fill=TEAL_DIM,
+               width=max(1, int(unit * 0.005)))
+
+    rounded_border(
+        ImageDraw.Draw(art), w, h,
+        inset=unit * 0.022, radius=unit * 0.075, color=TEAL_DIM, width=max(1, int(unit * 0.008)),
+    )
+    return art
+
+
+# --- Gun Arena: two teams, one crosshair ---------------------------------------------------------
+
+ARENA_RED = (232, 86, 76)
+ARENA_BLUE = (80, 146, 232)
+ARENA_GOLD = (242, 196, 96)
+ARENA_GOLD_DIM = (130, 100, 40)
+
+
+def draw_arena(w, h, wordmark=True):
+    """Red on the left, blue on the right, a crosshair where they meet."""
+    unit = min(w, h)
+    base = Image.new("RGB", (w, h), (0, 0, 0))
+    left = vertical_gradient(w, h, (54, 16, 14), (14, 4, 4))
+    right = vertical_gradient(w, h, (14, 26, 54), (4, 7, 16))
+    arr = np.asarray(left, float).copy()
+    arr[:, w // 2:] = np.asarray(right, float)[:, w // 2:]
+    lit = radial_falloff(w, h, w / 2, h * 0.44, unit * 0.7)
+    arr = np.clip(arr + lit[:, :, None] * np.array([30, 26, 20], float), 0, 255)
+    base = Image.fromarray(arr.astype(np.uint8), "RGB")
+    emissive = Image.new("RGB", (w, h), (0, 0, 0))
+    bd, ed = ImageDraw.Draw(base), ImageDraw.Draw(emissive)
+
+    cx, cy = w / 2, h * 0.44
+    # A glowing seam down the middle where the two sides meet.
+    seam = unit * 0.006
+    ed.rectangle((cx - seam, 0, cx + seam, h), fill=(90, 70, 40))
+
+    # The crosshair: a ring, four ticks and a dot.
+    ring = unit * 0.20
+    width = max(2, int(unit * 0.018))
+    for d in (bd, ed):
+        d.ellipse((cx - ring, cy - ring, cx + ring, cy + ring), outline=ARENA_GOLD, width=width)
+        gap, reach = unit * 0.07, unit * 0.30
+        d.line((cx - reach, cy, cx - gap, cy), fill=ARENA_GOLD, width=width)
+        d.line((cx + gap, cy, cx + reach, cy), fill=ARENA_GOLD, width=width)
+        d.line((cx, cy - reach, cx, cy - gap), fill=ARENA_GOLD, width=width)
+        d.line((cx, cy + gap, cx, cy + reach), fill=ARENA_GOLD, width=width)
+        dot = unit * 0.018
+        d.ellipse((cx - dot, cy - dot, cx + dot, cy + dot), fill=ARENA_GOLD)
+
+    # A score either side: the thing the match is about.
+    score = font(unit * 0.13, FONT_CONDENSED_BLACK)
+    for text, x, colour in (("7", cx - unit * 0.36, ARENA_RED), ("9", cx + unit * 0.36, ARENA_BLUE)):
+        half = bd.textlength(text, font=score) / 2
+        bd.text((x - half, cy - unit * 0.08), text, font=score, fill=colour)
+        ed.text((x - half, cy - unit * 0.08), text, font=score, fill=tuple(c // 2 for c in colour))
+
+    art = finish(base, emissive, unit, bloom_strength=0.8, vignette_strength=0.55, seed=79)
+
+    if wordmark:
+        d = ImageDraw.Draw(art)
+        title = font(unit * 0.100, FONT_CONDENSED_BLACK)
+        kicker = font(unit * 0.034)
+        tracking = unit * 0.020
+        title_y = h * 0.875
+        tracked_text(d, cx, h * 0.810, "TWO TEAMS, SIX GUNS", kicker, (186, 170, 150), unit * 0.022)
+        tracked_text(d, cx, title_y, "GUN ARENA", title, (250, 244, 232), tracking)
+        rule_half = tracked_width(d, "GUN ARENA", title, tracking) / 2
+        rule_y = title_y + unit * 0.058
+        d.line((cx - rule_half, rule_y, cx + rule_half, rule_y), fill=ARENA_GOLD_DIM,
+               width=max(1, int(unit * 0.005)))
+
+    rounded_border(
+        ImageDraw.Draw(art), w, h,
+        inset=unit * 0.022, radius=unit * 0.075, color=ARENA_GOLD_DIM, width=max(1, int(unit * 0.008)),
+    )
+    return art
+
+
+# --- The Backrooms: a yellow room that goes on, and something at the end of it ------------------
+
+BACK_YELLOW = (214, 198, 96)
+BACK_YELLOW_DIM = (110, 98, 42)
+BACK_CARPET = (108, 96, 50)
+
+
+def draw_backrooms(w, h, wordmark=True):
+    """One-point perspective down a yellow corridor, a hanging light, and a figure in it."""
+    unit = min(w, h)
+    cx, horizon = w / 2, h * 0.46
+    base = Image.new("RGB", (w, h), (0, 0, 0))
+    emissive = Image.new("RGB", (w, h), (0, 0, 0))
+    bd, ed = ImageDraw.Draw(base), ImageDraw.Draw(emissive)
+
+    # The far wall, small and bright, with everything else running back to it.
+    far = unit * 0.13
+    bd.rectangle((cx - far, horizon - far * 0.8, cx + far, horizon + far * 0.9), fill=(150, 138, 66))
+
+    # Walls, ceiling and carpet as four wedges meeting at the far wall. The corners go round
+    # each shape in order - taken out of order they cross over into a bowtie.
+    fl = (cx - far, horizon - far * 0.8)      # far wall, top left
+    fr = (cx + far, horizon - far * 0.8)      # top right
+    bl = (cx - far, horizon + far * 0.9)      # bottom left
+    br = (cx + far, horizon + far * 0.9)      # bottom right
+    bd.polygon([(0, 0), (0, h), bl, fl], fill=(176, 162, 78))        # left wall
+    bd.polygon([(w, 0), (w, h), br, fr], fill=(150, 138, 66))        # right wall
+    bd.polygon([(0, 0), (w, 0), fr, fl], fill=(196, 186, 140))       # ceiling
+    bd.polygon([(0, h), (w, h), br, bl], fill=BACK_CARPET)           # carpet
+
+    # Wall trim, and the skirting where the carpet meets the walls.
+    trim = max(1, int(unit * 0.006))
+    for near_y, far_y in ((h * 0.30, horizon - far * 0.55), (h, horizon + far * 0.9)):
+        bd.line((0, near_y, cx - far, far_y), fill=BACK_YELLOW_DIM, width=trim)
+        bd.line((w, near_y, cx + far, far_y), fill=BACK_YELLOW_DIM, width=trim)
+
+    # Fluorescent tubes receding down the ceiling: the only light there is.
+    for i, depth in enumerate((0.12, 0.42, 0.68, 0.86)):
+        half = unit * 0.20 * (1 - depth) + unit * 0.02
+        y = horizon - (horizon - h * 0.02) * (1 - depth) * 0.55
+        thickness = max(2, int(unit * 0.035 * (1 - depth) + 1))
+        box = (cx - half, y, cx + half, y + thickness)
+        bd.rectangle(box, fill=(255, 250, 225))
+        ed.rectangle(box, fill=(210, 200, 150))
+
+    # The figure, down at the far end and small with it, lit from behind.
+    figure_h = unit * 0.115
+    fx, fy = cx + unit * 0.055, horizon + far * 0.86
+    body = unit * 0.016
+    bd.rectangle((fx - body, fy - figure_h * 0.62, fx + body, fy), fill=(14, 12, 12))
+    head = unit * 0.015
+    bd.ellipse((fx - head, fy - figure_h * 0.92, fx + head, fy - figure_h * 0.62), fill=(14, 12, 12))
+    eye = max(1, int(unit * 0.004))
+    for side in (-1, 1):
+        spot = (fx + side * head * 0.42 - eye, fy - figure_h * 0.80 - eye,
+                fx + side * head * 0.42 + eye, fy - figure_h * 0.80 + eye)
+        bd.ellipse(spot, fill=(250, 242, 220))
+        ed.ellipse(spot, fill=(200, 180, 150))
+
+    art = finish(base, emissive, unit, bloom_strength=1.1, vignette_strength=0.7,
+                 grain_amount=0.014, seed=91)
+
+    if wordmark:
+        d = ImageDraw.Draw(art)
+        title = font(unit * 0.100, FONT_CONDENSED_BLACK)
+        kicker = font(unit * 0.034)
+        tracking = unit * 0.020
+        title_y = h * 0.875
+        tracked_text(d, cx, h * 0.810, "YOU NOCLIPPED OUT OF REALITY", kicker, (182, 172, 130),
+                     unit * 0.022)
+        tracked_text(d, cx, title_y, "THE BACKROOMS", title, (250, 244, 232), tracking)
+        rule_half = tracked_width(d, "THE BACKROOMS", title, tracking) / 2
+        rule_y = title_y + unit * 0.058
+        d.line((cx - rule_half, rule_y, cx + rule_half, rule_y), fill=BACK_YELLOW_DIM,
+               width=max(1, int(unit * 0.005)))
+
+    rounded_border(
+        ImageDraw.Draw(art), w, h,
+        inset=unit * 0.022, radius=unit * 0.075, color=BACK_YELLOW_DIM,
+        width=max(1, int(unit * 0.008)),
+    )
+    return art
+
+
 # Each mod: the artwork, the branding/ file prefix, and every folder that gets an icon.png.
 MODS = [
     (draw_club, "the-club", "THE CLUB", "A ROASTENGINE WORLD", NEON, NEON_DIM, (38, 10, 46), 31,
@@ -861,6 +1110,12 @@ MODS = [
      ["packs/bypass-api", "mods/bypass-api"]),
     (draw_hack, "roast-hack", "ROAST HACK", "NEEDS THE BYPASS API", VIOLET, VIOLET_DIM, (34, 14, 52), 67,
      ["packs/roast-hack", "mods/roast-hack"]),
+    (draw_placeholder, "placeholder-api", "PLACEHOLDER API", "FOR ROASTENGINE", TEAL, TEAL_DIM,
+     (10, 40, 36), 73, ["packs/placeholder-api", "mods/placeholder-api"]),
+    (draw_arena, "gun-arena", "GUN ARENA", "A ROASTENGINE WORLD", ARENA_GOLD, ARENA_GOLD_DIM,
+     (40, 30, 14), 79, ["mods/gun-arena"]),
+    (draw_backrooms, "backrooms", "THE BACKROOMS", "A ROASTENGINE WORLD", BACK_YELLOW,
+     BACK_YELLOW_DIM, (44, 40, 16), 91, ["mods/backrooms"]),
 ]
 
 

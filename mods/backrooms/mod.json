@@ -1,0 +1,8 @@
+{
+  "name": "The Backrooms",
+  "nameId": "backrooms",
+  "version": "1.0.0",
+  "type": "world",
+  "engine": "RoastEngine 0.3",
+  "description": "Three levels of the Backrooms, a home screen of its own, and something down there with you. Drop BK_INTRO.mp4 into video/ and it plays when you press Enter."
+}

@@ -48,6 +48,7 @@ public final class NetClient {
     private final LinkedBlockingQueue<byte[]> outgoing = new LinkedBlockingQueue<>();
     private final AtomicBoolean closed = new AtomicBoolean();
     private volatile String disconnectReason;
+    private final int protocolVersion;
 
     /**
      * Nobody is listening at the address yet - as opposed to a server that answered and said no.
@@ -59,11 +60,23 @@ public final class NetClient {
         }
     }
 
-    private NetClient(Socket socket, DataInputStream in, Welcome welcome, String address) {
+    private NetClient(Socket socket, DataInputStream in, Welcome welcome, String address,
+                      int protocolVersion) {
         this.socket = socket;
         this.in = in;
         this.welcome = welcome;
         this.address = address;
+        this.protocolVersion = protocolVersion;
+    }
+
+    /**
+     * The version both ends settled on: our own, or the older one the server would take.
+     *
+     * <p>Anything added after that version has to stay unused on this connection - see
+     * {@link Protocol#supportsArena}.
+     */
+    public int protocolVersion() {
+        return protocolVersion;
     }
 
     /**
@@ -75,6 +88,43 @@ public final class NetClient {
      * @throws IOException with a message fit to show the player
      */
     public static NetClient connect(String address, String ticket, String name) throws IOException {
+        // Say hello as the version we are, and if an older server turns us away for it, offer an
+        // older version until one is taken. A server running a build from before the versions were
+        // made to get along has no idea it could simply talk to us, so the asking is done here.
+        String firstRefusal = null;
+        for (int version = Protocol.VERSION; version >= Protocol.MIN_VERSION; version--) {
+            try {
+                return connectAs(address, ticket, name, version);
+            } catch (VersionRefusedException e) {
+                if (firstRefusal == null) {
+                    firstRefusal = e.getMessage();
+                }
+                System.out.println("[Net] The server would not take version " + version
+                        + (version > Protocol.MIN_VERSION ? "; trying " + (version - 1) : ""));
+            }
+        }
+        throw new IOException(firstRefusal);
+    }
+
+    /** A rejection that sounds like it was about the version, and so is worth another try. */
+    private static final class VersionRefusedException extends IOException {
+        VersionRefusedException(String message) {
+            super(message);
+        }
+    }
+
+    /**
+     * True when a server's refusal was about which version we are, rather than about us - a ban or
+     * a missing sign-in is final and must be shown to the player as it is.
+     */
+    private static boolean soundsLikeVersion(String reason) {
+        String text = reason == null ? "" : reason.toLowerCase(java.util.Locale.ROOT);
+        return text.isBlank() || text.contains("out of date") || text.contains("version")
+                || text.contains("update");
+    }
+
+    private static NetClient connectAs(String address, String ticket, String name, int version)
+            throws IOException {
         InetSocketAddress target = parse(address);
         String host = target.getHostString();
         int port = target.getPort();
@@ -85,19 +135,27 @@ public final class NetClient {
             socket.setTcpNoDelay(true);
             socket.setSoTimeout(CONNECT_TIMEOUT_MS);
             OutputStream out = socket.getOutputStream();
-            out.write(Protocol.encode(new Hello(Protocol.VERSION, ticket, name)));
+            out.write(Protocol.encode(new Hello(version, ticket, name)));
             out.flush();
 
             DataInputStream in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
             Message reply = Protocol.read(in);
             if (reply instanceof Rejected rejected) {
-                throw new IOException(rejected.reason());
+                closeQuietly(socket);
+                throw soundsLikeVersion(rejected.reason())
+                        ? new VersionRefusedException(rejected.reason())
+                        : new IOException(rejected.reason());
             }
             if (!(reply instanceof Welcome welcome)) {
                 throw new IOException("That does not look like a RoastEngine server.");
             }
+            if (version != Protocol.VERSION) {
+                System.out.println("[Net] Joined " + host + ":" + port + " as version " + version
+                        + " (this build is " + Protocol.VERSION + ")"
+                        + (Protocol.supportsArena(version) ? "" : "; arena matches are off here"));
+            }
             socket.setSoTimeout(READ_TIMEOUT_MS);
-            NetClient client = new NetClient(socket, in, welcome, host + ":" + port);
+            NetClient client = new NetClient(socket, in, welcome, host + ":" + port, version);
             client.start();
             return client;
         } catch (UnknownHostException e) {

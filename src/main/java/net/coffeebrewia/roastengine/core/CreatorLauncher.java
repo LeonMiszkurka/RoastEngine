@@ -40,8 +40,7 @@ public final class CreatorLauncher {
             return start(sibling.getParent(), new String[]{sibling.toString()});
         }
 
-        boolean windows = System.getProperty("os.name").toLowerCase().contains("win");
-        Path wrapper = workingDir.resolve(windows ? "gradlew.bat" : "gradlew");
+        Path wrapper = workingDir.resolve(isWindows() ? "gradlew.bat" : "gradlew");
         if (Files.isRegularFile(wrapper)) {
             return start(workingDir, new String[]{wrapper.toString(), ":Creator:creator", "--console=plain"});
         }
@@ -50,7 +49,9 @@ public final class CreatorLauncher {
         if (Files.isExecutable(dist)) {
             return start(workingDir, new String[]{dist.toString()});
         }
-        return "Could not find the Creator. Run it with: ./gradlew :Creator:creator";
+        return isWindows()
+                ? "Could not find the Creator. Open it with bin\\RoastEngine Creator.bat"
+                : "Could not find the Creator. Run it with: ./gradlew :Creator:creator";
     }
 
     /** The "RoastEngine Creator" launcher inside the packaged app, or null when not packaged. */
@@ -63,9 +64,26 @@ public final class CreatorLauncher {
         if (dir == null) {
             return null;
         }
-        boolean windows = System.getProperty("os.name").toLowerCase().contains("win");
-        Path creator = dir.resolve("RoastEngine Creator" + (windows ? ".exe" : ""));
-        return Files.isExecutable(creator) ? creator : null;
+        for (String name : creatorLauncherNames()) {
+            Path creator = dir.resolve(name);
+            // A .bat is a regular file Windows will happily run; isExecutable() is about
+            // permissions the shipped scripts do not carry there.
+            if (Files.isRegularFile(creator) && (isWindows() || Files.isExecutable(creator))) {
+                return creator;
+            }
+        }
+        return null;
+    }
+
+    /** What the Creator's launcher is called next to the game's own, per system. */
+    private static String[] creatorLauncherNames() {
+        return isWindows()
+                ? new String[]{"RoastEngine Creator.bat", "RoastEngine Creator.exe"}
+                : new String[]{"RoastEngine Creator"};
+    }
+
+    private static boolean isWindows() {
+        return System.getProperty("os.name").toLowerCase().contains("win");
     }
 
     private static String start(Path workingDir, String[] command) {
@@ -75,8 +93,7 @@ public final class CreatorLauncher {
                     // Let the Creator's output go to this terminal; it is a separate window.
                     .redirectOutput(ProcessBuilder.Redirect.INHERIT)
                     .redirectError(ProcessBuilder.Redirect.INHERIT)
-                    .redirectInput(new File(System.getProperty("os.name").toLowerCase().contains("win")
-                            ? "NUL" : "/dev/null"))
+                    .redirectInput(new File(isWindows() ? "NUL" : "/dev/null"))
                     .start();
             System.out.println("[Creator] Launching: " + String.join(" ", command));
             return null;

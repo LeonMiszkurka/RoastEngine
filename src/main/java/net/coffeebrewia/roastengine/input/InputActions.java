@@ -52,6 +52,10 @@ public final class InputActions {
     private Set<Path> lastSeenApi = Set.of();
     private Set<Path> lastSeenSchemes = Set.of();
     private String status = "Keyboard and mouse";
+    /** True when a scheme actually drove a controller this frame. */
+    private boolean liveController;
+    /** Controllers already complained about, so the warning is said once and not every frame. */
+    private final Set<String> unplayable = new LinkedHashSet<>();
 
     /**
      * Rebuilds this frame's state.
@@ -88,6 +92,9 @@ public final class InputActions {
         if (input.isKeyDown(GLFW_KEY_E)) {
             setDown(InputButton.INTERACT);
         }
+        if (input.isKeyDown(GLFW_KEY_Q)) {
+            setDown(InputButton.DROP);
+        }
         if (input.isKeyDown(GLFW_KEY_ESCAPE)) {
             setDown(InputButton.PAUSE);
         }
@@ -100,14 +107,24 @@ public final class InputActions {
     }
 
     private void applyControllers(Gamepads gamepads, float dt) {
+        liveController = false;
         if (schemes.isEmpty()) {
             return;
         }
         for (Gamepads.Device device : gamepads.connected()) {
+            boolean driven = false;
             for (ControlScheme scheme : schemes.values()) {
                 if (scheme.matches(device)) {
                     scheme.apply(device, dt, this);
+                    driven = true;
                 }
+            }
+            liveController |= driven;
+            if (!driven && unplayable.add(device.guid() + " " + device.name())) {
+                // A pad nobody can read is worth complaining about once, with the reason: whether a
+                // mapping would help depends on whether there is anything there to map.
+                System.err.println("[Input] No control scheme can read this controller. "
+                        + Gamepads.advice(device));
             }
         }
     }
@@ -153,6 +170,14 @@ public final class InputActions {
 
     public boolean hasSchemes() {
         return !schemes.isEmpty();
+    }
+
+    /**
+     * True when a controller is connected <em>and</em> a scheme can read it - which is not the same
+     * as one being plugged in, since a pad GLFW has no layout for drives nothing.
+     */
+    public boolean hasLiveController() {
+        return liveController;
     }
 
     // ---------------------------------------------------------------------
@@ -202,6 +227,7 @@ public final class InputActions {
             try {
                 api = InputEditApi.load(apiFolder, modName);
                 System.out.println("[Input] " + api.name() + " " + api.version() + " enabled");
+                applyMappings(api);
             } catch (IOException | RuntimeException e) {
                 System.err.println("[Input] " + modName + ": " + e.getMessage());
             }
@@ -230,6 +256,35 @@ public final class InputActions {
             }
         }
         status = describe();
+    }
+
+    /**
+     * Teaches GLFW the pad layouts the API mod ships, so a controller it does not recognise can
+     * still be read as an ordinary gamepad. Pads already connected are re-examined on the next
+     * poll, so this takes effect without unplugging anything.
+     */
+    private void applyMappings(InputEditApi api) {
+        int added = 0;
+        for (String mapping : api.mappings()) {
+            boolean accepted;
+            // GLFW wants the line as a nul-terminated C string; the stack frame holds it just long
+            // enough for the call.
+            try (org.lwjgl.system.MemoryStack stack = org.lwjgl.system.MemoryStack.stackPush()) {
+                accepted = org.lwjgl.glfw.GLFW.glfwUpdateGamepadMappings(stack.UTF8(mapping));
+            }
+            if (accepted) {
+                added++;
+            } else {
+                System.err.println("[Input] " + InputEditApi.MAPPINGS + ": GLFW refused a line - "
+                        + mapping.substring(0, Math.min(40, mapping.length())));
+            }
+        }
+        // Forget what we have already grumbled about: a pad that could not be read a moment ago
+        // may well be readable now.
+        unplayable.clear();
+        if (added > 0) {
+            System.out.println("[Input] " + added + " extra pad layout(s) from " + api.name());
+        }
     }
 
     private String describe() {

@@ -33,8 +33,12 @@ public final class AnimatedModel {
 
     // Per-frame scratch, allocated once.
     private final Matrix4f[] localPose;
+    /** A second pose, for the clip laid over part of the body - the arms while carrying. */
+    private final Matrix4f[] overlayPose;
     private final Matrix4f[] worldPose;
     private final Matrix4f[] palette;
+    /** Which nodes hang off a given bone, worked out the first time that bone is asked about. */
+    private final Map<String, boolean[]> subtrees = new HashMap<>();
 
     public AnimatedModel(String fileName, List<Part> parts, List<Texture> textures, Skeleton skeleton,
                          Vector3f min, Vector3f max, int triangleCount) {
@@ -47,6 +51,7 @@ public final class AnimatedModel {
         this.triangleCount = triangleCount;
 
         this.localPose = newMatrixArray(skeleton.nodeCount());
+        this.overlayPose = newMatrixArray(skeleton.nodeCount());
         this.worldPose = newMatrixArray(skeleton.nodeCount());
         this.palette = newMatrixArray(Math.max(1, skeleton.boneCount()));
         skeleton.buildRestPalette(palette, worldPose);
@@ -82,6 +87,67 @@ public final class AnimatedModel {
         skeleton.buildPalette(localPose, palette, worldPose);
 
     }
+
+    /**
+     * Poses from {@code base}, then lays {@code overlay} over one limb of the body.
+     *
+     * <p>This is how walking while carrying something looks right: the legs keep the walk cycle
+     * while the arms take the hold pose. Everything from {@code overlayRoot} downwards comes from
+     * the overlay and the rest from the base, so the two clips need not know about each other.
+     *
+     * <p>Falls back to posing from {@code base} alone when there is no overlay or the rig has no
+     * bone by that name - a clip made for one rig should not blank another.
+     *
+     * @param overlayRoot the bone the overlay takes over from, itself included
+     */
+    public void pose(AnimationClip base, float baseTime, AnimationClip overlay, float overlayTime,
+                     String overlayRoot) {
+        boolean[] under = overlayRoot == null ? null : bonesUnder(overlayRoot);
+        if (overlay == null || under == null) {
+            pose(base, baseTime);
+            return;
+        }
+        if (base == null) {
+            for (int node = 0; node < localPose.length; node++) {
+                localPose[node].set(skeleton.restTransform(node));
+            }
+        } else {
+            base.sample(baseTime, skeleton, localPose);
+        }
+        overlay.sample(overlayTime, skeleton, overlayPose);
+        for (int node = 0; node < localPose.length; node++) {
+            if (under[node]) {
+                localPose[node].set(overlayPose[node]);
+            }
+        }
+        skeleton.buildPalette(localPose, palette, worldPose);
+    }
+
+    /**
+     * Which nodes hang off one bone, that bone included, or null when the rig has no such bone.
+     *
+     * <p>Worked out once per bone and kept: nodes are stored parents-first, so a single forward
+     * pass carries membership down the hierarchy.
+     */
+    private boolean[] bonesUnder(String root) {
+        boolean[] cached = subtrees.get(root);
+        if (cached != null) {
+            return cached;
+        }
+        int index = skeleton.nodeIndex(root);
+        if (index < 0) {
+            return null;
+        }
+        boolean[] under = new boolean[skeleton.nodeCount()];
+        under[index] = true;
+        for (int node = index + 1; node < under.length; node++) {
+            int parent = skeleton.nodeParent(node);
+            under[node] = parent >= 0 && under[parent];
+        }
+        subtrees.put(root, under);
+        return under;
+    }
+
     /** Uploads the current pose and draws every part. The shader must be bound already. */
     public void draw(ShaderProgram shader) {
         shader.setUniform("uBones", palette);
@@ -99,6 +165,16 @@ public final class AnimatedModel {
             part.mesh().draw();
         }
         shader.setUniform("uUseTexture", 0);
+    }
+
+    /**
+     * Where a bone is in model space, as of the last {@link #pose} call - for attaching
+     * something to it.
+     *
+     * @return {@code out}, or null when this model has no bone by that name
+     */
+    public Matrix4f boneTransform(String boneName, Matrix4f out) {
+        return skeleton.nodeModelTransform(boneName, worldPose, out);
     }
 
     public Skeleton skeleton() {

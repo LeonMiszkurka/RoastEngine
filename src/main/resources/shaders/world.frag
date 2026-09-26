@@ -21,6 +21,11 @@ uniform float uAlpha;      // material opacity: glass and other see-through surf
 uniform vec3  uEmissive;   // light the surface gives off by itself (neon, screens)
 /** How much emission shows: full in the HDR shader pipeline, toned down without it. */
 uniform float uEmissiveStrength;
+/**
+ * Overall brightness, for levels dark enough that a screen's own settings matter. Left at 0 by
+ * everything that does not care, which reads as "normal" rather than as pitch black.
+ */
+uniform float uBrightness;
 
 out vec4 FragColor;
 
@@ -47,6 +52,7 @@ void main() {
     }
 
     color += uEmissive * uEmissiveStrength;
+    color *= uBrightness <= 0.0 ? 1.0 : uBrightness;
 
     if (uHighlight == 1) {
         // Flat accent colour, no fog, so the selection stays visible at any distance.

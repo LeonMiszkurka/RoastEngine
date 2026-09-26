@@ -38,6 +38,11 @@ public final class SceneObject {
      * Any imported model can be one.
      */
     public boolean entity = false;
+    /**
+     * The player can pick this up and carry it (see HoldSystem). A script can switch it on with
+     * {@code hold_item("Name")} instead of setting it here.
+     */
+    public boolean holdable = false;
     /** Prompt shown when the player looks at it, e.g. "open the door". */
     public String label = "";
     /** Optional Python script (file name inside the project's {@code scripts/} folder). */

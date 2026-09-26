@@ -1,0 +1,384 @@
+# RoastEngine Backrooms materials
+newmtl wallpaper
+Kd 0.840 0.780 0.450
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+map_Kd wallpaper.png
+
+newmtl wallpaper_damp
+Kd 0.660 0.600 0.330
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+map_Kd wallpaper_damp.png
+
+newmtl carpet
+Kd 0.580 0.520 0.280
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+map_Kd carpet.png
+
+newmtl carpet_stain
+Kd 0.440 0.390 0.210
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+map_Kd carpet.png
+
+newmtl ceiling_tile
+Kd 0.780 0.740 0.580
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+map_Kd ceiling.png
+
+newmtl fluorescent
+Kd 1.000 0.970 0.800
+Ka 0 0 0
+Ks 0 0 0
+Ke 1.600 1.540 1.200
+d 1.00
+
+newmtl concrete
+Kd 0.520 0.510 0.490
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+map_Kd concrete.png
+
+newmtl concrete_dark
+Kd 0.340 0.340 0.330
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+map_Kd concrete_dark.png
+
+newmtl concrete_floor
+Kd 0.420 0.410 0.400
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+map_Kd concrete_floor.png
+
+newmtl steel
+Kd 0.380 0.400 0.430
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl lamp_cold
+Kd 0.800 0.880 1.000
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.700 0.850 1.300
+d 1.00
+
+newmtl grime
+Kd 0.240 0.230 0.200
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+map_Kd grime.png
+
+newmtl grime_wall
+Kd 0.200 0.190 0.170
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+map_Kd grime_wall.png
+
+newmtl pipe
+Kd 0.330 0.300 0.260
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl rust
+Kd 0.400 0.240 0.140
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl lamp_sick
+Kd 0.550 0.850 0.450
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.450 1.100 0.400
+d 1.00
+
+newmtl brick
+Kd 0.440 0.310 0.260
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+map_Kd brick.png
+
+newmtl brick_dark
+Kd 0.320 0.220 0.190
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+map_Kd brick_dark.png
+
+newmtl switchgear
+Kd 0.360 0.380 0.360
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl warning
+Kd 0.860 0.720 0.180
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl lamp_caged
+Kd 1.000 0.900 0.620
+Ka 0 0 0
+Ks 0 0 0
+Ke 1.500 1.300 0.800
+d 1.00
+
+newmtl office_carpet
+Kd 0.300 0.330 0.360
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+map_Kd office_carpet.png
+
+newmtl office_wall
+Kd 0.720 0.700 0.640
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+map_Kd office_wall.png
+
+newmtl cubicle
+Kd 0.440 0.470 0.440
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl desk
+Kd 0.540 0.440 0.320
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl monitor
+Kd 0.100 0.100 0.110
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl hotel_paper
+Kd 0.560 0.400 0.360
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+map_Kd hotel_paper.png
+
+newmtl hotel_paper_alt
+Kd 0.440 0.310 0.280
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl hotel_carpet
+Kd 0.340 0.160 0.160
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+map_Kd hotel_carpet.png
+
+newmtl hotel_trim
+Kd 0.300 0.210 0.140
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl door_wood
+Kd 0.340 0.220 0.140
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl door_brass
+Kd 0.720 0.600 0.280
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl lamp_warm
+Kd 1.000 0.840 0.560
+Ka 0 0 0
+Ks 0 0 0
+Ke 1.400 1.050 0.600
+d 1.00
+
+newmtl black_wall
+Kd 0.110 0.110 0.120
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl black_floor
+Kd 0.090 0.090 0.100
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl exit_sign
+Kd 0.350 1.000 0.450
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.250 1.300 0.400
+d 1.00
+
+newmtl pool_tile
+Kd 0.920 0.940 0.940
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+map_Kd pool_tile.png
+
+newmtl pool_tile_alt
+Kd 0.820 0.860 0.880
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+map_Kd pool_tile.png
+
+newmtl pool_floor
+Kd 0.860 0.900 0.910
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+map_Kd pool_floor.png
+
+newmtl pool_water
+Kd 0.350 0.720 0.720
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 0.62
+
+newmtl pool_glow
+Kd 0.980 1.000 1.000
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.850 0.950 1.000
+d 1.00
+
+newmtl faceling_skin
+Kd 0.800 0.740 0.670
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl faceling_suit
+Kd 0.130 0.120 0.140
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl hound_hide
+Kd 0.260 0.210 0.170
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl hound_teeth
+Kd 0.860 0.830 0.740
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl hound_eye
+Kd 1.000 0.860 0.450
+Ka 0 0 0
+Ks 0 0 0
+Ke 1.300 1.000 0.350
+d 1.00
+
+newmtl smiler_body
+Kd 0.020 0.020 0.020
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl smiler_teeth
+Kd 1.000 0.980 0.920
+Ka 0 0 0
+Ks 0 0 0
+Ke 1.700 1.660 1.520
+d 1.00
+
+newmtl smiler_eye
+Kd 1.000 0.950 0.850
+Ka 0 0 0
+Ks 0 0 0
+Ke 1.900 1.750 1.400
+d 1.00
+
+newmtl scrawl_body
+Kd 0.030 0.030 0.040
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl scrawl_wound
+Kd 0.420 0.090 0.060
+Ka 0 0 0
+Ks 0 0 0
+Ke 0.000 0.000 0.000
+d 1.00
+
+newmtl scrawl_eye
+Kd 0.950 0.400 0.220
+Ka 0 0 0
+Ks 0 0 0
+Ke 1.500 0.550 0.250
+d 1.00
+

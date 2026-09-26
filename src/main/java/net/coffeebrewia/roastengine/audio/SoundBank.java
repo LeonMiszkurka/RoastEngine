@@ -16,12 +16,19 @@ public final class SoundBank {
     public static final String PASS_OUT = "pass_out";
     public static final String WHOOSH = "whoosh";
     public static final String CLICK = "click";
+    public static final String GUNSHOT = "gunshot";
+    public static final String HITMARKER = "hitmarker";
+    public static final String RELOAD = "reload";
+    public static final String HUM = "backrooms_hum";
+    public static final String DREAD = "backrooms_dread";
+    public static final String CAUGHT = "backrooms_caught";
     public static final String MUSIC_CLUB = "music_club";
     public static final String MUSIC_MENU = "music_menu";
 
     /** Every name a mod may override. */
     public static final String[] ALL = {
-            FOOTSTEP, DOOR, SIP, GLASS, PASS_OUT, WHOOSH, CLICK, MUSIC_CLUB, MUSIC_MENU
+            FOOTSTEP, DOOR, SIP, GLASS, PASS_OUT, WHOOSH, CLICK, GUNSHOT, HITMARKER, RELOAD,
+            HUM, DREAD, CAUGHT, MUSIC_CLUB, MUSIC_MENU
     };
 
     private static final int RATE = 44100;
@@ -37,6 +44,12 @@ public final class SoundBank {
         audio.register(PASS_OUT, passOut(), RATE);
         audio.register(WHOOSH, whoosh(), RATE);
         audio.register(CLICK, click(), RATE);
+        audio.register(GUNSHOT, gunshot(), RATE);
+        audio.register(HITMARKER, hitmarker(), RATE);
+        audio.register(RELOAD, reload(), RATE);
+        audio.register(HUM, hum(), RATE);
+        audio.register(DREAD, dread(), RATE);
+        audio.register(CAUGHT, caught(), RATE);
         audio.register(MUSIC_CLUB, clubMusic(), RATE);
         audio.register(MUSIC_MENU, menuMusic(), RATE);
     }
@@ -157,6 +170,61 @@ public final class SoundBank {
         return toPcm(out);
     }
 
+    /**
+     * A gunshot: a hard crack of noise over a low thump, with a short ring-off. Each gun plays it
+     * at its own pitch, so a sniper booms and a pistol snaps.
+     */
+    static short[] gunshot() {
+        float[] out = buffer(0.55f);
+        Random noise = new Random(13);
+        float body = 0f;
+        for (int i = 0; i < out.length; i++) {
+            float t = time(i);
+            float white = noise.nextFloat() * 2 - 1;
+            // The crack: bright noise, gone in a few milliseconds.
+            float crack = white * (float) Math.exp(-t * 90);
+            // The body: the same noise, low-passed, lasting longer - the room answering.
+            body += (white - body) * 0.08f;
+            float boom = body * (float) Math.exp(-t * 11) * 2.4f;
+            float thump = (float) Math.sin(2 * Math.PI * (60 + 90 * Math.exp(-t * 40)) * t)
+                    * (float) Math.exp(-t * 22);
+            out[i] = (crack * 0.9f + boom + thump * 0.8f) * 0.7f;
+        }
+        return toPcm(out);
+    }
+
+    /** The tick that says a shot landed: short, high and dry, so it cuts through the gunfire. */
+    static short[] hitmarker() {
+        float[] out = buffer(0.07f);
+        for (int i = 0; i < out.length; i++) {
+            float t = time(i);
+            out[i] = ((float) Math.sin(2 * Math.PI * 2900 * t) * 0.6f
+                    + (float) Math.sin(2 * Math.PI * 4400 * t) * 0.3f) * (float) Math.exp(-t * 70);
+        }
+        return toPcm(out);
+    }
+
+    /** A magazine out and a new one in: two metallic clacks. */
+    static short[] reload() {
+        float[] out = buffer(0.6f);
+        Random noise = new Random(17);
+        for (int i = 0; i < out.length; i++) {
+            float t = time(i);
+            float sample = 0f;
+            for (float at : new float[]{0.05f, 0.42f}) {
+                float k = t - at;
+                if (k >= 0f) {
+                    float envelope = (float) Math.exp(-k * 55);
+                    sample += ((float) Math.sin(2 * Math.PI * 1250 * k) * 0.5f
+                            + (float) Math.sin(2 * Math.PI * 2130 * k) * 0.3f
+                            + (noise.nextFloat() * 2 - 1) * 0.35f) * envelope;
+                }
+            }
+            out[i] = sample * 0.6f;
+        }
+        return toPcm(out);
+    }
+
     // ---------------------------------------------------------------------
     // Music
     // ---------------------------------------------------------------------
@@ -165,6 +233,64 @@ public final class SoundBank {
      * An eight-second, four-bar club loop at 120 BPM: four-on-the-floor kick, off-beat hats, a
      * walking bassline and a soft pad - with a murmuring crowd underneath.
      */
+    /**
+     * The sound of the Backrooms: fluorescent tubes at mains hum, with the room around them.
+     * Loops, so it plays on the music channel and never stops while you are down there.
+     */
+    static short[] hum() {
+        float[] out = buffer(4f);
+        Random noise = new Random(101);
+        float rumble = 0f;
+        for (int i = 0; i < out.length; i++) {
+            float t = time(i);
+            // 60 Hz and its harmonics: the buzz of a failing tube.
+            float buzz = (float) Math.sin(2 * Math.PI * 60 * t) * 0.35f
+                    + (float) Math.sin(2 * Math.PI * 120 * t) * 0.18f
+                    + (float) Math.sin(2 * Math.PI * 180 * t) * 0.09f;
+            // One tube flickers, so the buzz swells and dips rather than sitting still.
+            float flicker = 0.75f + 0.25f * (float) Math.sin(2 * Math.PI * 0.27f * t)
+                    * (float) Math.sin(2 * Math.PI * 0.11f * t);
+            // Air: filtered noise, the sound of a very large empty room.
+            rumble += (noise.nextFloat() * 2 - 1 - rumble) * 0.004f;
+            out[i] = buzz * flicker * 0.5f + rumble * 2.2f;
+        }
+        smoothLoop(out);
+        return toPcm(out);
+    }
+
+    /** It has seen you: a low string swelling up under a rising whine. */
+    static short[] dread() {
+        float[] out = buffer(1.6f);
+        for (int i = 0; i < out.length; i++) {
+            float t = time(i);
+            float swell = Math.min(1f, t * 3f) * (float) Math.exp(-Math.max(0f, t - 0.7f) * 2.2f);
+            float low = (float) Math.sin(2 * Math.PI * (48 + 6 * t) * t) * 0.6f
+                    + (float) Math.sin(2 * Math.PI * 72 * t) * 0.25f;
+            // The whine climbs a minor sixth over the length of the sting.
+            float whine = (float) Math.sin(2 * Math.PI * (320 + 210 * t) * t) * 0.16f;
+            out[i] = (low + whine) * swell;
+        }
+        return toPcm(out);
+    }
+
+    /** It reached you. A hit, and everything drops away. */
+    static short[] caught() {
+        float[] out = buffer(1.5f);
+        Random noise = new Random(23);
+        float body = 0f;
+        for (int i = 0; i < out.length; i++) {
+            float t = time(i);
+            float white = noise.nextFloat() * 2 - 1;
+            body += (white - body) * 0.05f;
+            float hit = (body * 2.6f + white * 0.4f) * (float) Math.exp(-t * 9);
+            // A falling tone under it: the lights going out.
+            float drop = (float) Math.sin(2 * Math.PI * (200 * (float) Math.exp(-t * 1.9f)) * t)
+                    * (float) Math.exp(-t * 1.5f) * 0.55f;
+            out[i] = hit + drop;
+        }
+        return toPcm(out);
+    }
+
     static short[] clubMusic() {
         float bpm = 120f;
         float beat = 60f / bpm;

@@ -1,6 +1,10 @@
 package net.coffeebrewia.roastengine.server;
 
+import net.coffeebrewia.roastengine.net.ArenaRules;
 import net.coffeebrewia.roastengine.net.Protocol;
+import net.coffeebrewia.roastengine.net.Protocol.ArenaAction;
+import net.coffeebrewia.roastengine.net.Protocol.ArenaEvent;
+import net.coffeebrewia.roastengine.net.Protocol.ArenaSetup;
 import net.coffeebrewia.roastengine.net.Protocol.Chat;
 import net.coffeebrewia.roastengine.net.Protocol.ChooseSession;
 import net.coffeebrewia.roastengine.net.Protocol.ModRef;
@@ -11,6 +15,8 @@ import net.coffeebrewia.roastengine.net.Protocol.Move;
 import net.coffeebrewia.roastengine.net.Protocol.PlayerJoined;
 import net.coffeebrewia.roastengine.net.Protocol.PlayerLeft;
 import net.coffeebrewia.roastengine.net.Protocol.Pose;
+import net.coffeebrewia.roastengine.net.Protocol.Shoot;
+import net.coffeebrewia.roastengine.net.Protocol.ShotFired;
 import net.coffeebrewia.roastengine.net.Protocol.Snapshot;
 import net.coffeebrewia.roastengine.net.Protocol.Welcome;
 
@@ -52,6 +58,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  * choice passes to the next player. When the last player leaves, the session ends and the next
  * person in picks again. Setting {@code world} in server.properties fixes the world instead.
  *
+ * <p><b>Arenas.</b> When the world is a game mode, the first player to load it sends its rules
+ * ({@link ArenaSetup}) and the server starts refereeing: it keeps the teams, votes, health and
+ * score in an {@link ArenaRules} and tells everyone what happened. It still never loads the
+ * world - the rules are all it needs.
+ *
  * <p>With {@code idleShutdownMinutes} set, the server exits with {@link #EXIT_IDLE} once nobody
  * has been on for that long. On the cloud machine the service turns that exit into powering
  * the machine off, so it only costs money while people play.
@@ -86,6 +97,10 @@ public final class RoastServer {
     private List<ModRef> sessionMods = List.of();
     /** Who is picking the world while none is set; null when nobody is. */
     private ClientConnection chooser;
+    /** The match, when the world is an arena; null otherwise. */
+    private ArenaRules arena;
+    /** Counts down to the next full arena update, sent even when nothing changed. */
+    private float arenaResync;
 
     RoastServer(ServerConfig config) {
         this(config, () -> System.exit(EXIT_IDLE));
@@ -103,6 +118,7 @@ public final class RoastServer {
         world = config.world.isEmpty() ? null : new ModRef(0, config.world, config.world);
         sessionMods = List.of();
         chooser = null;
+        arena = null;
     }
 
     public static void main(String[] args) throws IOException {
@@ -165,11 +181,20 @@ public final class RoastServer {
      * @return true when welcomed
      */
     boolean admit(ClientConnection client, Hello hello) {
-        if (hello.version() != Protocol.VERSION) {
-            client.close(hello.version() < Protocol.VERSION
-                    ? "Your game is out of date. Please update RoastEngine to play here."
-                    : "This server is out of date. It runs an older version of RoastEngine.");
+        if (!Protocol.canTalkTo(hello.version())) {
+            client.close("Your game is too old to play here (it speaks version " + hello.version()
+                    + "; this server needs " + Protocol.MIN_VERSION + " or newer). Please update "
+                    + "RoastEngine.");
             return false;
+        }
+        // Anything from the floor up is welcome, newer builds included: messages are only ever
+        // added, and one this server has never heard of is read past and dropped. What each player
+        // can take part in is decided by their version, not by turning them away.
+        client.protocolVersion = hello.version();
+        if (hello.version() != Protocol.VERSION) {
+            log((hello.name().isBlank() ? "A player" : hello.name()) + " speaks version "
+                    + hello.version() + "; this server speaks " + Protocol.VERSION
+                    + (Protocol.supportsArena(hello.version()) ? "" : " - no arena matches for them"));
         }
         Identity identity;
         if (accounts != null) {
@@ -234,6 +259,9 @@ public final class RoastServer {
             client.send(new PlayerJoined(other.id, other.name, other.rank));
         }
         players.put(client.id, client);
+        if (arena != null) {
+            arena.addPlayer(client.id);
+        }
         if (world == null && chooser == null) {
             chooser = client; // first in: they pick
         }
@@ -294,6 +322,88 @@ public final class RoastServer {
         log(client.name + " picked " + picked.name() + withMods);
     }
 
+    // --- Arenas --------------------------------------------------------------------------
+
+    /** The world's rules, from a player who has loaded it. The first one of a session counts. */
+    synchronized void arenaSetup(ClientConnection client, ArenaSetup setup) {
+        if (world == null || arena != null || !Protocol.supportsArena(client.protocolVersion)) {
+            return; // nothing is being played yet, or the match is already set up
+        }
+        arena = new ArenaRules(ArenaRules.Settings.from(setup));
+        for (ClientConnection player : players.values()) {
+            arena.addPlayer(player.id);
+        }
+        ArenaRules.Settings rules = arena.settings();
+        log(world.name() + " is an arena: " + rules.maps().size() + " map(s), first to "
+                + rules.scoreLimit() + ", " + rules.minPlayers() + "+ players");
+    }
+
+    synchronized void arenaAction(ClientConnection client, ArenaAction action) {
+        if (arena == null) {
+            return;
+        }
+        switch (action.action()) {
+            case ArenaAction.JOIN_TEAM -> arena.joinTeam(client.id, action.value());
+            case ArenaAction.VOTE -> arena.vote(client.id, action.value());
+            case ArenaAction.READY -> arena.setReady(client.id, action.value() != 0);
+            case ArenaAction.GUN -> arena.selectGun(client.id, action.value());
+            default -> {
+                // An action from a newer game: nothing this server knows how to do.
+            }
+        }
+    }
+
+    /**
+     * A shot. The rules decide whether it could have happened; if so, everyone else hears it
+     * (the shooter has already drawn their own).
+     */
+    synchronized void shoot(ClientConnection client, Shoot shot) {
+        if (arena == null || !finite(shot)) {
+            return;
+        }
+        ArenaRules.ShotResult result = arena.shoot(client.id, shot.target(), shot.damage(), shot.gun(),
+                System.nanoTime());
+        if (result == ArenaRules.ShotResult.IGNORED) {
+            return;
+        }
+        int landed = result == ArenaRules.ShotResult.MISS ? 0 : shot.target();
+        broadcastArena(Protocol.encode(new ShotFired(client.id, shot.gun(), landed, shot.ox(), shot.oy(), shot.oz(),
+                shot.dx(), shot.dy(), shot.dz(), Math.min(shot.distance(), 1000f))), client);
+    }
+
+    private static boolean finite(Shoot shot) {
+        float[] values = {shot.ox(), shot.oy(), shot.oz(), shot.dx(), shot.dy(), shot.dz(), shot.distance()};
+        for (float value : values) {
+            if (!Float.isFinite(value)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Runs the match clock and tells everyone what changed. Called from the tick. */
+    private synchronized void tickArena(float dt) {
+        if (arena == null) {
+            return;
+        }
+        arena.tick(dt);
+        for (ArenaEvent event : arena.drainEvents()) {
+            broadcastArena(Protocol.encode(event), null);
+            if (event.kind() == ArenaEvent.MATCH_START) {
+                log("Match started on " + arena.settings().maps().get(event.value()));
+            } else if (event.kind() == ArenaEvent.MATCH_END) {
+                log("Match over: " + (event.value() == ArenaRules.RED ? "red wins"
+                        : event.value() == ArenaRules.BLUE ? "blue wins" : "a draw"));
+            }
+        }
+        arenaResync -= dt;
+        if (arena.isDirty() || arenaResync <= 0f) {
+            arenaResync = 1f;
+            arena.clearDirty();
+            broadcastArena(Protocol.encode(arena.state()), null);
+        }
+    }
+
     /** Keeps names printable and short; a reference with nothing to find it by is dropped. */
     private static ModRef cleanRef(ModRef ref) {
         if (ref == null) {
@@ -330,6 +440,9 @@ public final class RoastServer {
     synchronized void leave(ClientConnection client, String reason) {
         if (players.remove(client.id) == null) {
             return; // never got in
+        }
+        if (arena != null) {
+            arena.removePlayer(client.id);
         }
         broadcast(Protocol.encode(new PlayerLeft(client.id)), null);
         broadcast(Protocol.encode(Chat.system(client.name + " left the game")), null);
@@ -406,6 +519,7 @@ public final class RoastServer {
                 }
             }
             broadcast(Protocol.encode(new Snapshot(poses)), null);
+            tickArena(1f / Protocol.TICK_RATE);
         } catch (RuntimeException e) {
             // An exception would silently cancel the repeating task, freezing everyone.
             log("Tick failed: " + e);
@@ -428,6 +542,18 @@ public final class RoastServer {
     private void broadcast(byte[] frame, ClientConnection except) {
         for (ClientConnection player : players.values()) {
             if (player != except) {
+                player.send(frame);
+            }
+        }
+    }
+
+    /**
+     * The same, for a message only some builds know about. A player on an older game hears nothing
+     * of the match rather than being sent something they would drop anyway.
+     */
+    private void broadcastArena(byte[] frame, ClientConnection except) {
+        for (ClientConnection player : players.values()) {
+            if (player != except && Protocol.supportsArena(player.protocolVersion)) {
                 player.send(frame);
             }
         }

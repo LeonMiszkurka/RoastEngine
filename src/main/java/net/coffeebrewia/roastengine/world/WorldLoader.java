@@ -87,6 +87,7 @@ public final class WorldLoader {
                         object.fill);
                 placed.npc = object.npc;
                 placed.entity = object.entity;
+                placed.holdable = object.holdable;
                 placed.scriptParams = object.scriptParams == null
                         ? java.util.Map.of() : java.util.Map.copyOf(object.scriptParams);
                 placed.modFolder = mod.folder();

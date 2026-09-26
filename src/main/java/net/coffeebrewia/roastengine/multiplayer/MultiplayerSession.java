@@ -1,6 +1,8 @@
 package net.coffeebrewia.roastengine.multiplayer;
 
 import net.coffeebrewia.roastengine.net.Protocol;
+import net.coffeebrewia.roastengine.net.Protocol.ArenaEvent;
+import net.coffeebrewia.roastengine.net.Protocol.ArenaState;
 import net.coffeebrewia.roastengine.net.Protocol.Chat;
 import net.coffeebrewia.roastengine.net.Protocol.ChatSend;
 import net.coffeebrewia.roastengine.net.Protocol.Message;
@@ -11,6 +13,7 @@ import net.coffeebrewia.roastengine.net.Protocol.PlayerLeft;
 import net.coffeebrewia.roastengine.net.Protocol.Pong;
 import net.coffeebrewia.roastengine.net.Protocol.Pose;
 import net.coffeebrewia.roastengine.net.Protocol.SessionUpdate;
+import net.coffeebrewia.roastengine.net.Protocol.ShotFired;
 import net.coffeebrewia.roastengine.net.Protocol.Snapshot;
 import org.joml.Vector3f;
 
@@ -47,6 +50,10 @@ public final class MultiplayerSession {
     private int pingMillis = -1;
     /** What is being played; null until the server says. */
     private SessionUpdate session;
+    /** The arena match, when the world is one; null until the server sends it. */
+    private ArenaState arenaState;
+    /** Shots and match events, waiting for the arena to read them. */
+    private final List<Message> arenaEvents = new ArrayList<>();
 
     public MultiplayerSession(NetClient client, String displayName) {
         this.client = client;
@@ -131,6 +138,10 @@ public final class MultiplayerSession {
             }
         } else if (message instanceof SessionUpdate update) {
             session = update;
+        } else if (message instanceof ArenaState state) {
+            arenaState = state;
+        } else if (message instanceof ShotFired || message instanceof ArenaEvent) {
+            arenaEvents.add(message);
         } else if (message instanceof Pong pong) {
             pingMillis = (int) ((System.nanoTime() - pong.stamp()) / 1_000_000L);
         } else if (message instanceof Ping ping) {
@@ -146,6 +157,44 @@ public final class MultiplayerSession {
     /** Sends the world and mods this player picked, when it is their turn to pick. */
     public void choose(Protocol.ModRef world, List<Protocol.ModRef> mods) {
         client.send(new Protocol.ChooseSession(world, mods));
+    }
+
+    /** The arena match as the server last described it, or null when there is none. */
+    public ArenaState arenaState() {
+        return arenaState;
+    }
+
+    /** Shots and match events since the last call, oldest first. */
+    public List<Message> drainArenaEvents() {
+        List<Message> drained = List.copyOf(arenaEvents);
+        arenaEvents.clear();
+        return drained;
+    }
+
+    /** True when the server on the other end is new enough to referee an arena match. */
+    public boolean supportsArena() {
+        return Protocol.supportsArena(client.protocolVersion());
+    }
+
+    /** An arena setup, lobby choice or shot, for the server to referee. */
+    public void sendArena(Message message) {
+        if (!supportsArena()) {
+            return; // an older server would only drop it
+        }
+        client.send(message);
+    }
+
+    public int myId() {
+        return client.welcome().yourId();
+    }
+
+    /** Someone's name by id, for the kill feed: "you" for us, "someone" for a stranger. */
+    public String nameOf(int id) {
+        if (id == myId()) {
+            return myName();
+        }
+        RemotePlayer other = others.get(id);
+        return other == null ? "someone" : other.name;
     }
 
     public void sendChat(String text) {

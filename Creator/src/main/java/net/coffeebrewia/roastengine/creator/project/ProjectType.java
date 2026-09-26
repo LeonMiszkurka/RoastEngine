@@ -6,6 +6,9 @@ import net.coffeebrewia.roastengine.creator.export.ModType;
  * What a project is for. Chosen when the project is created and stored in {@code project.json};
  * it decides which editor opens and what that editor offers.
  *
+ * <p>A rig project animates a model rather than placing any: it opens the animator, whose clips
+ * are saved beside the .glb they were written for.
+ *
  * <p>A world and a mod both place objects, so both get the 3D viewport and the transform tools.
  * A mod goes further: its objects can carry animations and scripted behaviour, because a mod is
  * dropped into somebody else's world and has to do something once it lands there. An API ships
@@ -18,7 +21,8 @@ public enum ProjectType {
     WORLD("world", "World", "A level you play. Place objects, set the ground and sky."),
     MOD("mod", "Mod", "Content added on top of a world - with animations and scripted behaviour."),
     API("api", "API", "Scripts other mods build on. No scene: a scripting editor, not a viewport."),
-    SHADERS("shaders", "Shaders", "A shader pack. A live preview seen through your GLSL, with its tuning sliders.");
+    SHADERS("shaders", "Shaders", "A shader pack. A live preview seen through your GLSL, with its tuning sliders."),
+    RIG("rig", "Rig", "Animate a rigged model. Pose its bones, key them over time, save the clips beside it.");
 
     private final String id;
     private final String displayName;
@@ -42,7 +46,7 @@ public enum ProjectType {
         return description;
     }
 
-    /** True for the types with a 3D view: the scene editors, and the shader preview. */
+    /** True for the types with a 3D view: the scene editors, the shader preview, the animator. */
     public boolean hasWorldView() {
         return this != API;
     }
@@ -63,7 +67,8 @@ public enum ProjectType {
             case WORLD -> ModType.WORLD;
             case MOD -> ModType.MOD;
             // A shader pack is an API mod: the engine looks for shaders/ in enabled APIs.
-            case API, SHADERS -> ModType.API;
+            // A rig ships as part of a mod's assets rather than on its own.
+            case API, SHADERS, RIG -> ModType.API;
         };
     }
 

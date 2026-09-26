@@ -71,6 +71,20 @@ public final class PlayerModel {
     private static final String WALK_FILE = "player_walk.glb";
     /** Optional: played once when the player throws a punch. */
     private static final String PUNCH_FILE = "player_punch.glb";
+    /** The pose for carrying something. Optional: without it the player holds things idly. */
+    private static final String HOLD_FILE = "player_hold.glb";
+    /**
+     * The bone a held item hangs off. Rigs name this differently, so it can be pointed at
+     * another one with {@code -Droastengine.holdBone=...}.
+     */
+    private static final String HOLD_BONE = System.getProperty("roastengine.holdBone", "hand_r");
+    /**
+     * The bone the hold pose takes over from while the player walks, so the legs keep the walk
+     * cycle and everything above the waist carries the item. Rigs name this differently, so it can
+     * be pointed at another one with {@code -Droastengine.holdOverlayBone=...}.
+     */
+    private static final String HOLD_OVERLAY_BONE =
+            System.getProperty("roastengine.holdOverlayBone", "spine_01");
     /**
      * Which slice of player_punch.glb is the punch, in seconds, and how long it lasts.
      *
@@ -91,6 +105,13 @@ public final class PlayerModel {
     private AnimationClip idleClip;
     private AnimationClip walkClip;
     private AnimationClip punchClip;
+    private AnimationClip holdClip;
+    private float holdTime;
+    private boolean holding;
+    /** Where the rigged body was last drawn, so a held item can be hung off its hand. */
+    private final Matrix4f lastBodyTransform = new Matrix4f();
+    private boolean bodyDrawn;
+    private final Matrix4f boneScratch = new Matrix4f();
     /** Counts up while a punch plays; 0 when not punching. */
     private float punchTime;
     private float animationTime;
@@ -203,6 +224,27 @@ public final class PlayerModel {
                                 + "punch. Export only the punch, or pick the moment it happens with "
                                 + "-PpunchStart=<seconds>.");
                     }
+                }
+            }
+            // The hold pose is optional too: without it the player carries things idly. It is
+            // usually a pose rather than an animation - there is no movement in holding something
+            // still - so a file with no keyframes in it is read off the rig's own transforms.
+            Path holdFile = findFile(HOLD_FILE);
+            if (holdFile != null) {
+                holdClip = AnimatedModelLoader.loadPose(holdFile, model.skeleton(), "hold");
+                if (holdClip != null) {
+                    model.addClip("hold", holdClip);
+                    System.out.printf("[PlayerModel] Hold: %s (%.1fs)%n",
+                            holdFile.getFileName(), holdClip.durationSeconds());
+                } else {
+                    // Worth saying out loud: the file is there, so the pose looks set up, and
+                    // nothing else explains the player carrying things with their arms down.
+                    System.out.println("[PlayerModel] " + HOLD_FILE + " holds no pose - it has no "
+                            + "animation and its rig stands exactly as " + IDLE_FILE + " does, so "
+                            + "there is nothing in it to play. In Blender: put the armature in Pose "
+                            + "Position, pose the arms, select every bone and press I (Location & "
+                            + "Rotation) to key the pose, then export the .glb with animation "
+                            + "included.");
                 }
             }
             System.out.println("[PlayerModel] Clips - idle: "
@@ -382,6 +424,37 @@ public final class PlayerModel {
     }
 
     /** True while a punch is playing, so the sandbox knows not to start another. */
+    /** Tells the body whether the player is carrying something, which changes its idle pose. */
+    public void setHolding(boolean holding) {
+        if (holding != this.holding) {
+            holdTime = 0f;
+            this.holding = holding;
+        }
+    }
+
+    /** True when there is a {@code player_hold.glb} to pose with. */
+    public boolean hasHoldPose() {
+        return holdClip != null;
+    }
+
+    /**
+     * Where the player's hand is in the world, as of the last time the body was drawn - the
+     * place a held item hangs from.
+     *
+     * @return {@code out}, or null when there is no rigged body, no such bone, or it has not
+     *         been drawn this frame
+     */
+    public Matrix4f handAnchor(Matrix4f out) {
+        if (animated == null || !bodyDrawn) {
+            return null;
+        }
+        Matrix4f bone = animated.boneTransform(HOLD_BONE, boneScratch);
+        if (bone == null) {
+            return null;
+        }
+        return out.set(lastBodyTransform).mul(bone);
+    }
+
     public boolean isPunching() {
         return punchTime > 0f;
     }
@@ -437,6 +510,19 @@ public final class PlayerModel {
             drawAnimated(shader, eye, yaw, eyeHeight, hideHead);
             return;
         }
+        if (holding && holdClip != null) {
+            holdTime += deltaSeconds;
+            if (moving && walkClip != null) {
+                // Walking with something in hand: the legs keep walking and the hold pose is laid
+                // over the upper body, so the arms carry the item instead of swinging free.
+                walkTime += deltaSeconds;
+                animated.pose(walkClip, walkTime, holdClip, holdTime, HOLD_OVERLAY_BONE);
+            } else {
+                animated.pose(holdClip, holdTime);
+            }
+            drawAnimated(shader, eye, yaw, eyeHeight, hideHead);
+            return;
+        }
         AnimationClip clip = moving && walkClip != null ? walkClip : idleClip;
         if (moving) {
             walkTime += deltaSeconds;
@@ -463,6 +549,8 @@ public final class PlayerModel {
                 .rotateY(customYawOffset)
                 .scale(customScale)
                 .translate(0f, -animated.min().y, 0f));
+        lastBodyTransform.set(scratch);
+        bodyDrawn = true;
         animated.draw(shader);
         shader.setUniform("uHeadRadius", NO_HEAD_CLIP);
     }
@@ -476,10 +564,26 @@ public final class PlayerModel {
      */
     public void renderOtherAnimated(ShaderProgram shader, Vector3f eye, float yaw, float eyeHeight,
                                     float time, boolean moving) {
+        renderOtherAnimated(shader, eye, yaw, eyeHeight, time, moving, false);
+    }
+
+    /**
+     * The same, for someone carrying something: they take the hold pose, over the walk cycle
+     * while they are moving. Their
+     * hand is then where {@link #handAnchor} says, until the next body is drawn.
+     */
+    public void renderOtherAnimated(ShaderProgram shader, Vector3f eye, float yaw, float eyeHeight,
+                                    float time, boolean moving, boolean holdingSomething) {
         if (animated == null) {
             return;
         }
-        animated.pose(moving && walkClip != null ? walkClip : idleClip, time);
+        if (moving && walkClip != null && holdingSomething && holdClip != null) {
+            animated.pose(walkClip, time, holdClip, time, HOLD_OVERLAY_BONE);
+        } else {
+            AnimationClip clip = moving && walkClip != null ? walkClip
+                    : holdingSomething && holdClip != null ? holdClip : idleClip;
+            animated.pose(clip, time);
+        }
         shader.setUniform("uHeadRadius", NO_HEAD_CLIP);
         shader.setUniform("uModel", scratch.translation(eye.x, eye.y - eyeHeight, eye.z)
                 .rotateY(-yaw)
@@ -487,7 +591,14 @@ public final class PlayerModel {
                 .rotateY(customYawOffset)
                 .scale(customScale)
                 .translate(0f, -animated.min().y, 0f));
+        lastBodyTransform.set(scratch);
+        bodyDrawn = true;
         animated.draw(shader);
+    }
+
+    /** Forgets where the last body was drawn, so a stale hand is never used next frame. */
+    public void startFrame() {
+        bodyDrawn = false;
     }
 
     /**

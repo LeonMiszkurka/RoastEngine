@@ -51,6 +51,14 @@ public final class ScriptSystem {
         void pushPlayer(float x, float y, float z);
     }
 
+    /** Where {@code hold_item()} and friends go: set by the sandbox, absent in tests. */
+    private HoldSystem holding;
+
+    /** Tells scripts which hands they are putting things into. */
+    public void useHands(HoldSystem holding) {
+        this.holding = holding;
+    }
+
     /** One object's running script. */
     private static final class Running {
         final WorldObject object;
@@ -264,6 +272,41 @@ public final class ScriptSystem {
             }
             return null;
         }));
+        // Holding things. A script says which of the level's objects can be picked up:
+        //
+        //     item = "Lantern"
+        //     hold_item(item)
+        //
+        // and the player can then pick that one up with the interact key. give_item() skips the
+        // asking and puts it straight in their hands.
+        interpreter.define("hold_item", Script.function("hold_item", 1, args -> {
+            WorldObject wanted = objectArgument(args.get(0), "hold_item");
+            if (holding != null) {
+                holding.makeHoldable(wanted);
+            }
+            return null;
+        }));
+        interpreter.define("give_item", Script.function("give_item", 1, args -> {
+            WorldObject wanted = objectArgument(args.get(0), "give_item");
+            if (holding == null || wanted == null) {
+                return false;
+            }
+            holding.makeHoldable(wanted);
+            return holding.pickUp(wanted) >= 0;
+        }));
+        interpreter.define("drop_item", Script.function("drop_item", 0, args -> {
+            if (holding == null) {
+                return null;
+            }
+            Vector3f eye = hooks.playerEye();
+            // Straight down in front of them: a script has no idea which way they are looking.
+            return holding.dropHeld(new Vector3f(eye.x, eye.y - 1.7f, eye.z),
+                    new Vector3f(0f, 0f, -1f)) != null;
+        }));
+        interpreter.define("held_item", Script.function("held_item", 0, args -> {
+            WorldObject held = holding == null ? null : holding.held();
+            return held == null ? null : objectHandle(held);
+        }));
         interpreter.define("param", Script.function("param", 1, 2, args -> {
             String value = object.scriptParams.get(Script.text(args.get(0)));
             if (value == null) {
@@ -277,6 +320,32 @@ public final class ScriptSystem {
         }));
         interpreter.define("distance_to_player", Script.function("distance_to_player", 0, args ->
                 (double) object.center(new Vector3f()).distance(hooks.playerEye())));
+    }
+
+    /**
+     * The object a script meant: either one from {@code find()}, or the name of one.
+     *
+     * <p>Names are how the Creator's list of objects reads, so a script can be written by
+     * copying what is on screen.
+     */
+    private WorldObject objectArgument(Object value, String where) {
+        if (value instanceof Interpreter.ScriptObject handle) {
+            Object name = handle.property("name");
+            return name == Script.MISSING ? null : byName(Script.text(name));
+        }
+        if (value == null) {
+            throw new ScriptError(where + "() needs the name of an object, or one from find()", 0);
+        }
+        return byName(Script.text(value));
+    }
+
+    private WorldObject byName(String name) {
+        for (WorldObject object : world.objects()) {
+            if (object.name.equalsIgnoreCase(name) && !object.removedByScript) {
+                return object;
+            }
+        }
+        return null;
     }
 
     private Object sound(List<Object> args) {

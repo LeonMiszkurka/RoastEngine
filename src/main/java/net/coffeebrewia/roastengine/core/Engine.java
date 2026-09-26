@@ -269,6 +269,11 @@ public final class Engine {
         return settings;
     }
 
+    /** Where settings live, for anything that keeps its own file beside them. */
+    public java.nio.file.Path configDirectory() {
+        return config.configDirectory();
+    }
+
     public AudioEngine audio() {
         return audio;
     }

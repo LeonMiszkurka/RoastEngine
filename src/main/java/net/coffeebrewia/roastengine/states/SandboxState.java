@@ -27,7 +27,17 @@ import net.coffeebrewia.roastengine.ui.PauseMenu;
 import net.coffeebrewia.roastengine.ui.Theme;
 import net.coffeebrewia.roastengine.world.Interactions;
 import net.coffeebrewia.roastengine.world.LoadedWorld;
+import net.coffeebrewia.roastengine.arena.ArenaMode;
+import net.coffeebrewia.roastengine.arena.ArenaScreens;
+import net.coffeebrewia.roastengine.backrooms.BackroomsMode;
+import net.coffeebrewia.roastengine.ui.SpawnMenu;
+import net.coffeebrewia.roastengine.world.ItemCatalog;
+import net.coffeebrewia.roastengine.world.SpawnKit;
+import net.coffeebrewia.roastengine.world.Usables;
+import net.coffeebrewia.roastengine.backrooms.BackroomsScreens;
+import net.coffeebrewia.roastengine.inventory.PlaceHolderApi;
 import net.coffeebrewia.roastengine.world.EntitySystem;
+import net.coffeebrewia.roastengine.world.HoldSystem;
 import net.coffeebrewia.roastengine.world.NpcSystem;
 import net.coffeebrewia.roastengine.world.ScriptSystem;
 import net.coffeebrewia.roastengine.world.WorldLoader;
@@ -127,6 +137,33 @@ public final class SandboxState implements GameState {
     private ScriptSystem scripts;
     /** Models flagged as entities: they wander, and they can be punched. */
     private final EntitySystem entities = new EntitySystem();
+    /** Picking things up and carrying them; the bag needs the PlaceHolder API. */
+    private final HoldSystem holding = new HoldSystem();
+    /** The holdable object in reach, if any. */
+    private WorldObject holdTarget;
+    private final Matrix4f heldItemTransform = new Matrix4f();
+    /** Where our own hand was this frame, for hanging what we hold off it. */
+    private final Matrix4f ownHand = new Matrix4f();
+    private boolean ownHandValid;
+    /** Everyone else's hand this frame, for drawing their guns. */
+    private final java.util.Map<Integer, Matrix4f> otherHands = new java.util.HashMap<>();
+    /** The world's game mode, when it is an arena; null otherwise. */
+    private ArenaMode arena;
+    private ArenaScreens arenaScreens;
+    /** The world's own front end, when it ships one (the Backrooms); null otherwise. */
+    private BackroomsMode backrooms;
+    private BackroomsScreens backroomsScreens;
+    /** Everything the spawn gun can put in the world, and the list that picks from it. */
+    private ItemCatalog catalog;
+    /** What the thing in hand does when the trigger is pulled: a gun fires, a bottle swings. */
+    private final Usables usables = new Usables();
+    private final SpawnMenu spawnMenu = new SpawnMenu();
+    private boolean spawnDemoDone;
+    private SpawnKit.Kit spawnKit;
+    /** Which of a world's own levels the table has been moved to, so it moves once per level. */
+    private String kitLevel = "";
+    /** A unit cube, stretched into each bullet's streak. */
+    private net.coffeebrewia.roastengine.render.Mesh tracerMesh;
     /** How far a punch reaches. */
     private static final float PUNCH_REACH = 2.8f;
     /** The entity the crosshair is on, if any. */
@@ -269,6 +306,9 @@ public final class SandboxState implements GameState {
         camera.position().set(spawn);
         verticalVelocity = 0f;
         unstick();
+        // A table with the spawn gun on it, beside wherever this world starts you.
+        spawnKit = SpawnKit.place(world, spawn, spawn.y - EYE_HEIGHT);
+        kitLevel = "";
         interactions.reset();
         liquidAsset = world.liquidAsset();
         String passOutSpot = System.getProperty("roastengine.passOutAt");
@@ -278,8 +318,24 @@ public final class SandboxState implements GameState {
                     Float.parseFloat(parts[1]), Float.parseFloat(parts[2])));
         }
         scripts = new ScriptSystem(world, scriptHooks());
+        holding.load(world, PlaceHolderApi.fromMods(engine.modManager()));
+        // After the hold system, not before: it is what marks a world's objects holdable, and the
+        // list sorts a holdable thing into Usables rather than Items.
+        catalog = new ItemCatalog(world, enabledModFolders());
+        usables.reset();
+        scripts.useHands(holding);
         scripts.load();
         entities.load(world);
+        arena = ArenaMode.start(world, online, arenaHost());
+        arenaScreens = arena == null ? null : new ArenaScreens(arena);
+        backrooms = BackroomsMode.start(world, world.modFolders(), engine.configDirectory(),
+                backroomsHost());
+        backroomsScreens = backrooms == null ? null
+                : new BackroomsScreens(backrooms, engine.settings());
+        // Guns are fired outside the arena too, so the streak mesh is always wanted.
+        if (tracerMesh == null) {
+            tracerMesh = Primitives.cube(1f, 0.86f, 0.45f);
+        }
         playerModel = new PlayerModel(EYE_HEIGHT);
         // Dev aid: -PstartPitch=60 starts the camera looking down (handy for screenshots).
         String startPitch = System.getProperty("roastengine.startPitch");
@@ -432,7 +488,10 @@ public final class SandboxState implements GameState {
         } else if (!paused && !chatting) {
             cheats.handleHotkeys(input);
         }
-        if (!chatting && !cheatMenuOpen && actions.wasPressed(InputButton.PAUSE)) {
+        if (!chatting && !cheatMenuOpen && actions.wasPressed(InputButton.PAUSE)
+                && backroomsScreens != null && backroomsScreens.optionsOpen()) {
+            backroomsScreens.closeOptions();   // Esc backs out of Options, not into the pause menu
+        } else if (!chatting && !cheatMenuOpen && actions.wasPressed(InputButton.PAUSE)) {
             if (!paused) {
                 pause();
             } else if (pauseMenu.back()) {
@@ -445,22 +504,63 @@ public final class SandboxState implements GameState {
         if (paused) {
             return;
         }
-        if (!input.isCursorCaptured() && !cheatMenuOpen) {
+        if (arena != null) {
+            arena.update(dt, input, !chatting);
+        }
+        if (backrooms != null) {
+            // A world with levels of its own teleports the player about, so the table follows
+            // them in rather than staying where the scene happens to start.
+            if (!backrooms.blocksGameplay() && spawnKit != null
+                    && !backrooms.level().id().equals(kitLevel)) {
+                kitLevel = backrooms.level().id();
+                spawnKit.moveBeside(camera.position(), camera.position().y - EYE_HEIGHT);
+            }
+            backrooms.update(dt, !chatting);
+            if (backrooms.showingVideo() && input.wasAnythingPressed()) {
+                backrooms.endIntro();   // any key or click skips the intro
+            }
+        }
+        if (!chatting && SpawnKit.isSpawnGun(holding.held())
+                && input.wasKeyPressed(GLFW_KEY_R)) {
+            spawnMenu.toggle();
+        }
+        // Dev aid: -PspawnMenuDemo=true puts the gun in hand and opens the list, for a look
+        // at it without reaching for the keyboard.
+        if (!spawnDemoDone && Boolean.getBoolean("roastengine.spawnMenuDemo")) {
+            spawnDemoDone = true;
+            world.objects().stream().filter(SpawnKit::isSpawnGun).findFirst()
+                    .ifPresent(holding::pickUp);
+            spawnMenu.toggle();
+        }
+        if (spawnMenu.isOpen()) {
+            spawnMenu.scroll(input.scrollY());
+        }
+        boolean arenaMenu = arena != null && arena.panelOpen();
+        // The home screen, the intro and the caught screen are all mouse screens.
+        boolean worldMenu = (backrooms != null && backrooms.blocksGameplay()) || spawnMenu.isOpen();
+        if ((arenaMenu || worldMenu) && input.isCursorCaptured()) {
+            input.setCursorCaptured(false); // the lobby is a mouse menu
+        }
+        if (!input.isCursorCaptured() && !cheatMenuOpen && !arenaMenu && !worldMenu) {
             input.setCursorCaptured(true); // e.g. focus came back to the window
         }
         if (cheatMenuOpen) {
             return; // the menu is up: the world waits
         }
+        // Dead, or choosing in the lobby: the world carries on but the player stays put.
+        boolean frozen = (arena != null && arena.blocksMovement())
+                || (backrooms != null && backrooms.blocksGameplay())
+                || spawnMenu.isOpen();
         camera.setFieldOfView(cheats.value("fov", engine.settings().fieldOfView));
         handleCheatActions();
         // While taking an automated screenshot the camera is locked, so shots are reproducible.
-        if (!chatting && System.getProperty("roastengine.autoScreenshot") == null) {
+        if (!chatting && !frozen && System.getProperty("roastengine.autoScreenshot") == null) {
             float sensitivity = MOUSE_SENSITIVITY * engine.settings().mouseSensitivity;
             camera.rotate(actions.axis(InputAxis.LOOK_X) * sensitivity,
                     actions.axis(InputAxis.LOOK_Y) * sensitivity);
         }
 
-        boolean typing = chatting;
+        boolean typing = chatting || frozen;
         float forward = typing ? 0f : actions.axis(InputAxis.MOVE_Y);
         float right = typing ? 0f : actions.axis(InputAxis.MOVE_X);
         if (engine.inVr()) {
@@ -545,8 +645,8 @@ public final class SandboxState implements GameState {
         // Doors and drinks: E interacts, holding E keeps drinking.
         interactionTarget = interactions.findTarget(world, camera);
         boolean vrPunch = engine.inVr() && engine.vr().input().punchPressed();
-        boolean interactPressed = !chatting && (actions.wasPressed(InputButton.INTERACT) || vrPunch);
-        boolean interactHeld = !chatting && actions.isDown(InputButton.INTERACT);
+        boolean interactPressed = !typing && (actions.wasPressed(InputButton.INTERACT) || vrPunch);
+        boolean interactHeld = !typing && actions.isDown(InputButton.INTERACT);
         // Dev aid: -PautoInteract=<seconds> presses E at that time and holds it afterwards.
         if (autoInteractAt > 0f) {
             elapsed += dt;
@@ -558,10 +658,20 @@ public final class SandboxState implements GameState {
         }
         punchTarget = entities.isEmpty() ? null
                 : entities.target(camera.position(), camera.forward(new Vector3f()), PUNCH_REACH);
+        holdTarget = holding.target(camera.position(), camera.forward(new Vector3f()), HoldSystem.REACH);
         if (interactPressed && passOutTimer <= 0f && punchTarget != null) {
             throwPunch(punchTarget);
             interactPressed = false; // the punch used the key press
         }
+        // Picking something up comes before doors and drinks: an item lying on a bar should be
+        // picked up rather than sipped.
+        if (interactPressed && passOutTimer <= 0f && holdTarget != null) {
+            pickUp(holdTarget);
+            interactPressed = false;
+        }
+        updateCarrying(dt);
+        usables.update(dt);
+        useHeldItem(input, typing);
         if (interactPressed && passOutTimer <= 0f) {
             if (interactionTarget != null && interactionTarget.isDoor()
                     && !interactionTarget.doorWantsOpen && npcs.hasDoorman()) {
@@ -824,7 +934,10 @@ public final class SandboxState implements GameState {
     /** Listed in Settings > General, so a plugged-in pad can be confirmed at a glance. */
     private String connectedControllers() {
         List<String> names = engine.gamepads().connected().stream()
-                .map(device -> device.name() + (device.isGamepad() ? "" : " (no pad mapping)"))
+                .map(device -> device.name() + (device.isGamepad() ? ""
+                        : device.hasNothingToRead()
+                                ? " - nothing to read; try Bluetooth rather than the cable"
+                                : " - no pad layout, id " + device.guid()))
                 .toList();
         return names.isEmpty()
                 ? "No controller detected - plug one in and it is picked up straight away."
@@ -983,6 +1096,193 @@ public final class SandboxState implements GameState {
     }
 
     /** Tells scripts which objects the player is standing in or walking through. */
+    /** Every enabled mod's folder, which is where the spawn gun's item list comes from. */
+    private List<java.nio.file.Path> enabledModFolders() {
+        List<java.nio.file.Path> folders = new java.util.ArrayList<>();
+        for (var mod : engine.modManager().installedMods()) {
+            if (engine.modManager().isEnabled(mod)) {
+                folders.add(mod.folder());
+            }
+        }
+        return folders;
+    }
+
+    /** What the Backrooms may see and do: the camera, the world, teleporting, sound. */
+    private BackroomsMode.Host backroomsHost() {
+        return new BackroomsMode.Host() {
+            @Override
+            public Camera camera() {
+                return camera;
+            }
+
+            @Override
+            public LoadedWorld world() {
+                return world;
+            }
+
+            @Override
+            public void teleport(Vector3f eye, float yawDegrees) {
+                camera.position().set(eye);
+                camera.setYaw((float) Math.toRadians(yawDegrees));
+                camera.setPitch(0f);
+                velocityX = 0f;
+                velocityZ = 0f;
+                verticalVelocity = 0f;
+                unstick();
+            }
+
+            @Override
+            public void playSound(String name, float volume, float pitch) {
+                engine.audio().play(name, volume, pitch);
+            }
+
+            @Override
+            public void notice(String text) {
+                setNotice(text);
+            }
+
+            @Override
+            public net.coffeebrewia.roastengine.audio.AudioEngine audio() {
+                return engine.audio();
+            }
+
+            @Override
+            public void quitToMainMenu() {
+                engine.states().switchTo(returnState);
+            }
+        };
+    }
+
+    /** What an arena may see and do: the camera, the world, the other players, teleporting. */
+    private ArenaMode.Host arenaHost() {
+        return new ArenaMode.Host() {
+            @Override
+            public Camera camera() {
+                return camera;
+            }
+
+            @Override
+            public LoadedWorld world() {
+                return world;
+            }
+
+            @Override
+            public HoldSystem holding() {
+                return holding;
+            }
+
+            @Override
+            public float eyeHeight() {
+                return EYE_HEIGHT;
+            }
+
+            @Override
+            public java.util.Collection<RemotePlayer> others() {
+                return online == null ? List.of() : online.others();
+            }
+
+            @Override
+            public void teleport(Vector3f eye, float yawDegrees) {
+                camera.position().set(eye);
+                camera.setYaw((float) Math.toRadians(yawDegrees));
+                camera.setPitch(0f);
+                velocityX = 0f;
+                velocityZ = 0f;
+                verticalVelocity = 0f;
+                unstick();
+            }
+
+            @Override
+            public void knockEntity(WorldObject entity, Vector3f direction) {
+                entities.punch(entity, direction, 0.8f);
+            }
+
+            @Override
+            public void playSound(String name, float volume, float pitch) {
+                engine.audio().play(name, volume, pitch);
+            }
+
+            @Override
+            public void notice(String text) {
+                setNotice(text);
+            }
+        };
+    }
+
+    /** Puts something in the player's hands, and says why not when it will not go. */
+    private void pickUp(WorldObject item) {
+        if (holding.pickUp(item) >= 0) {
+            setNotice("Picked up " + item.name);
+            engine.audio().play(SoundBank.CLICK, 0.7f, 1.2f);
+        } else if (holding.hasBag()) {
+            setNotice("Your bag is full - drop something first (Q)");
+        } else {
+            setNotice("Your hands are full - drop " + holding.held().name + " first (Q)");
+        }
+    }
+
+    /** The drop key, the number keys, and telling the body it is carrying something. */
+    /**
+     * The left mouse button, on whatever is in hand: a gun fires and anything else swings.
+     *
+     * <p>A match has its own trigger - ammo, reloads and a referee - so this stands aside while the
+     * arena is running rather than firing a second, rule-free shot alongside it.
+     */
+    private void useHeldItem(Input input, boolean typing) {
+        WorldObject inHand = holding.held();
+        if (typing || arena != null || passOutTimer > 0f || inHand == null) {
+            return;
+        }
+        boolean pressed = input.wasMousePressed(GLFW_MOUSE_BUTTON_LEFT);
+        boolean down = input.isMouseDown(GLFW_MOUSE_BUTTON_LEFT);
+        Vector3f eye = camera.position();
+        Vector3f aim = camera.forward(new Vector3f());
+
+        Usables.Fired fired = usables.pullTrigger(inHand, world, entities, eye, aim, pressed, down);
+        if (fired != null) {
+            engine.audio().play(SoundBank.GUNSHOT, 0.85f,
+                    fired.gun().pitch() * (0.96f + (float) Math.random() * 0.08f));
+            if (fired.hit()) {
+                engine.audio().play(SoundBank.HITMARKER, 0.6f, 1f);
+            }
+            // The view kicks up, and a little to one side, as the arena's guns do.
+            float kick = (float) Math.toRadians(fired.gun().recoil());
+            camera.rotate(((float) Math.random() - 0.5f) * kick * 0.4f, -kick);
+            return;
+        }
+        if (pressed && usables.swing(inHand, entities, eye, aim) != null) {
+            playerModel.punch();
+            engine.audio().play(SoundBank.CLICK, 0.6f, 0.9f);
+            setNotice("Swung " + inHand.name);
+        } else if (pressed && Usables.kindOf(inHand) == Usables.Kind.SWING) {
+            playerModel.punch();
+        }
+    }
+
+    private void updateCarrying(float dt) {
+        boolean typing = chatting || paused;
+        if (!typing && engine.actions().wasPressed(InputButton.DROP)) {
+            WorldObject dropped = holding.dropHeld(
+                    new Vector3f(camera.position()).sub(0f, EYE_HEIGHT, 0f),
+                    camera.forward(new Vector3f()));
+            if (dropped != null) {
+                setNotice("Put down " + dropped.name);
+                engine.audio().play(SoundBank.CLICK, 0.7f, 0.8f);
+            }
+        }
+        // The number keys reach the bag the PlaceHolder API gives them.
+        if (!typing && holding.hasBag()) {
+            for (int slot = 0; slot < holding.inventory().size(); slot++) {
+                if (engine.input().wasKeyPressed(GLFW_KEY_1 + slot)
+                        && holding.inventory().select(slot)) {
+                    WorldObject now = holding.held();
+                    setNotice(now == null ? "Empty hand" : "Holding " + now.name);
+                }
+            }
+        }
+        playerModel.setHolding(holding.held() != null);
+    }
+
     private void reportTouches() {
         updatePlayerBox();
         boolean any = false;
@@ -1157,6 +1457,51 @@ public final class SandboxState implements GameState {
         playerMax.set(p.x + PLAYER_RADIUS, feet + PLAYER_HEIGHT, p.z + PLAYER_RADIUS);
     }
 
+    /** The brightness the world's own options ask for; 1 when the world has no say. */
+    private float worldBrightness() {
+        return backrooms == null ? 1f : backrooms.options().brightness;
+    }
+
+    /** Puts a chosen item on the floor a couple of paces ahead, facing the player. */
+    private void spawnItem(ItemCatalog.Item item) {
+        if (catalog == null) {
+            return;
+        }
+        Vector3f forward = camera.forward(new Vector3f());
+        forward.y = 0f;
+        if (forward.lengthSquared() < 1e-4f) {
+            forward.set(0f, 0f, -1f);
+        }
+        Vector3f where = new Vector3f(camera.position()).add(forward.normalize().mul(2.4f));
+        // Onto the floor under that spot, so it does not hang in the air or sink through.
+        float surface = surfaceHeightAt(where.x, where.z, camera.position().y);
+        where.y = Float.isNaN(surface) ? camera.position().y - EYE_HEIGHT : surface;
+        WorldObject spawned = catalog.spawn(world, item, where, camera.yaw() + (float) Math.PI);
+        if (spawned == null) {
+            setNotice("Could not load " + item.name());
+            return;
+        }
+        engine.audio().play(SoundBank.CLICK, 0.8f, 1.1f);
+        setNotice("Spawned " + item.name());
+    }
+
+    /** The top of whatever is under a spot, or NaN when there is nothing. */
+    private float surfaceHeightAt(float x, float z, float fromY) {
+        float best = Float.NaN;
+        Vector3f min = new Vector3f(x - 0.05f, -1e9f, z - 0.05f);
+        Vector3f max = new Vector3f(x + 0.05f, fromY, z + 0.05f);
+        for (WorldObject object : world.objects()) {
+            if (!object.collision || object.kills || !object.touches(min, max)) {
+                continue;
+            }
+            float top = object.topInColumn(x, z, fromY);
+            if (!Float.isNaN(top) && (Float.isNaN(best) || top > best)) {
+                best = top;
+            }
+        }
+        return best;
+    }
+
     private void setNotice(String text) {
         notice = text;
         noticeTimer = 4f;
@@ -1232,6 +1577,7 @@ public final class SandboxState implements GameState {
         shader.setUniform("uHeadRadius", PlayerModel.NO_HEAD_CLIP);
         // Glowing materials only really shine through a shader pack's bloom.
         shader.setUniform("uEmissiveStrength", shaders ? 1f : 0.35f);
+        shader.setUniform("uBrightness", worldBrightness());
         shader.setUniform("uUseTexture", 0);
         shader.setUniform("uAlpha", 1f);
 
@@ -1249,6 +1595,9 @@ public final class SandboxState implements GameState {
         for (WorldObject object : world.objects()) {
             if (object == interactions.heldDrink()) {
                 continue; // it is in the player's hand this frame
+            }
+            if (object.carried) {
+                continue; // in the player's hands or bag; drawn there instead
             }
             if (!object.npc.isEmpty()) {
                 continue; // characters are drawn by the NPC system
@@ -1293,7 +1642,7 @@ public final class SandboxState implements GameState {
         }
         if (online != null && !playerModel.isAnimated()) {
             for (RemotePlayer other : online.others()) {
-                if (other.isPlaced()) {
+                if (other.isPlaced() && (arena == null || !arena.isHidden(other.id))) {
                     playerModel.renderOther(shader, other.eye, other.yaw, EYE_HEIGHT,
                             other.walkPhase, other.moving);
                 }
@@ -1302,6 +1651,8 @@ public final class SandboxState implements GameState {
         shader.unbind();
 
         // Rigged characters and, if animated, the player's own body share the skinning shader.
+        playerModel.startFrame();
+        ownHandValid = false;
         {
             skinnedShader.bind();
             skinnedShader.setUniform("uProjection", camera.projectionMatrix(engine.window().aspectRatio()));
@@ -1312,6 +1663,7 @@ public final class SandboxState implements GameState {
             skinnedShader.setUniform("uHighlight", 0);
             skinnedShader.setUniform("uGrid", 0);
             skinnedShader.setUniform("uEmissiveStrength", shaders ? 1f : 0.35f);
+            skinnedShader.setUniform("uBrightness", worldBrightness());
             if (playerModel.isAnimated() && passOutTimer <= 0f) {
                 if (ownBodyFromOutside) {
                     // Still our own body: it punches and walks as it does in first person.
@@ -1321,18 +1673,52 @@ public final class SandboxState implements GameState {
                 } else {
                     playerModel.renderAnimatedBody(skinnedShader, camera, EYE_HEIGHT, lastDelta, moving);
                 }
+                ownHandValid = playerModel.handAnchor(ownHand) != null;
             }
             if (online != null && playerModel.isAnimated()) {
                 for (RemotePlayer other : online.others()) {
-                    if (other.isPlaced()) {
+                    if (other.isPlaced() && (arena == null || !arena.isHidden(other.id))) {
+                        boolean armed = arena != null && arena.gunOf(other.id) != null;
                         playerModel.renderOtherAnimated(skinnedShader, other.eye, other.yaw, EYE_HEIGHT,
-                                other.animationTime, other.moving);
+                                other.animationTime, other.moving, armed);
+                        Matrix4f hand = playerModel.handAnchor(new Matrix4f());
+                        if (hand != null) {
+                            otherHands.put(other.id, hand);
+                        }
                     }
                 }
             }
             npcs.renderAnimated(skinnedShader);
+            if (backrooms != null) {
+                backrooms.renderAnimated(skinnedShader);
+            }
             skinnedShader.unbind();
         }
+
+        // Whatever the player is carrying, drawn after the body: it hangs off the hand bone, and
+        // that bone is only where it should be once the body has been posed for this frame.
+        if (holding.held() != null || arena != null) {
+            shader.bind();
+            shader.setUniform("uProjection", camera.projectionMatrix(engine.window().aspectRatio()));
+            shader.setUniform("uView", camera.viewMatrix());
+            shader.setUniform("uCameraPos", camera.position());
+            shader.setUniform("uSkyColor", skyColor);
+            shader.setUniform("uFogDistance", PLATFORM_SIZE * 0.6f);
+            shader.setUniform("uHighlight", 0);
+            shader.setUniform("uHeadRadius", PlayerModel.NO_HEAD_CLIP);
+            shader.setUniform("uEmissiveStrength", shaders ? 1f : 0.35f);
+        shader.setUniform("uBrightness", worldBrightness());
+            shader.setUniform("uGrid", 0);
+            shader.setUniform("uUseTexture", 0);
+            shader.setUniform("uAlpha", 1f);
+            drawHeldItem(shader, ownBodyFromOutside);
+            if (arena != null) {
+                drawArenaWorld(shader);
+            }
+            drawUsableShots(shader);
+            shader.unbind();
+        }
+        otherHands.clear();
 
         if (shaders) {
             float drunk = Math.min(1f, interactions.totalSips() / (float) Math.max(1, sipsToPassOut));
@@ -1425,6 +1811,101 @@ public final class SandboxState implements GameState {
     }
 
     /** Raises the held glass towards the camera as the player drinks from it. */
+    /**
+     * Draws whatever the player is carrying, in their hand.
+     *
+     * <p>With a rigged player the item hangs off the hand bone, so it follows the animation. With
+     * the plain body there is no bone to hang it from, so it sits in front of the camera instead.
+     */
+    /** Other players' guns, and every shot's streak through the air. */
+    private void drawArenaWorld(ShaderProgram shader) {
+        if (online != null) {
+            for (RemotePlayer other : online.others()) {
+                WorldObject gun = arena.gunOf(other.id);
+                if (gun == null || !other.isPlaced() || arena.isHidden(other.id)) {
+                    continue;
+                }
+                shader.setUniform("uModel", arena.otherGunTransform(gun, other, otherHands.get(other.id),
+                        new Matrix4f()));
+                gun.asset.draw(shader);
+            }
+        }
+        org.lwjgl.opengl.GL11C.glEnable(org.lwjgl.opengl.GL11C.GL_BLEND);
+        Vector3f up = new Vector3f();
+        for (var tracer : arena.tracers()) {
+            Vector3f along = new Vector3f(tracer.to()).sub(tracer.from());
+            float length = along.length();
+            if (length < 0.05f) {
+                continue;
+            }
+            along.div(length);
+            up.set(Math.abs(along.y) > 0.99f ? 1f : 0f, Math.abs(along.y) > 0.99f ? 0f : 1f, 0f);
+            float thickness = tracer.mine() ? 0.010f : 0.018f;
+            Vector3f middle = new Vector3f(tracer.from()).add(tracer.to()).mul(0.5f);
+            shader.setUniform("uModel", new Matrix4f().translation(middle)
+                    .rotateTowards(along, up).scale(thickness, thickness, length));
+            float fade = 1f - tracer.age()[0] / arena.tracerSeconds();
+            shader.setUniform("uAlpha", Math.max(0f, fade) * 0.85f);
+            shader.setUniform("uEmissive", new Vector3f(1f, 0.8f, 0.35f));
+            tracerMesh.draw();
+        }
+        shader.setUniform("uAlpha", 1f);
+        shader.setUniform("uEmissive", new Vector3f());
+        org.lwjgl.opengl.GL11C.glDisable(org.lwjgl.opengl.GL11C.GL_BLEND);
+    }
+
+    /** The streak left by a gun fired outside a match. Same look as the arena's tracers. */
+    private void drawUsableShots(ShaderProgram shader) {
+        if (tracerMesh == null || usables.shots().isEmpty()) {
+            return;
+        }
+        org.lwjgl.opengl.GL11C.glEnable(org.lwjgl.opengl.GL11C.GL_BLEND);
+        Vector3f up = new Vector3f();
+        for (Usables.Shot shot : usables.shots()) {
+            Vector3f along = new Vector3f(shot.to()).sub(shot.from());
+            float length = along.length();
+            if (length < 0.05f) {
+                continue;
+            }
+            along.div(length);
+            up.set(Math.abs(along.y) > 0.99f ? 1f : 0f, Math.abs(along.y) > 0.99f ? 0f : 1f, 0f);
+            Vector3f middle = new Vector3f(shot.from()).add(shot.to()).mul(0.5f);
+            shader.setUniform("uModel", new Matrix4f().translation(middle)
+                    .rotateTowards(along, up).scale(0.010f, 0.010f, length));
+            shader.setUniform("uAlpha",
+                    Math.max(0f, 1f - shot.age() / Usables.TRACER_SECONDS) * 0.85f);
+            shader.setUniform("uEmissive", new Vector3f(1f, 0.8f, 0.35f));
+            tracerMesh.draw();
+        }
+        shader.setUniform("uAlpha", 1f);
+        shader.setUniform("uEmissive", new Vector3f());
+        org.lwjgl.opengl.GL11C.glDisable(org.lwjgl.opengl.GL11C.GL_BLEND);
+    }
+
+    private void drawHeldItem(ShaderProgram shader, boolean fromOutside) {
+        WorldObject item = holding.held();
+        if (item == null || item.removedByScript) {
+            return;
+        }
+        Matrix4f hand = ownHandValid ? ownHand : null;
+        Matrix4f aimed = arena == null ? null
+                : arena.ownGunTransform(item, hand, fromOutside, heldItemTransform);
+        Matrix4f transform;
+        if (aimed != null) {
+            transform = aimed;
+        } else if (hand != null) {
+            transform = holding.heldTransform(item, hand, heldItemTransform);
+        } else if (fromOutside) {
+            return; // seen from outside with no rig to hang it off: nowhere sensible to put it
+        } else {
+            transform = holding.heldTransform(item,
+                    holding.handFallback(camera.position(), camera.yaw(), new Matrix4f()),
+                    heldItemTransform);
+        }
+        shader.setUniform("uModel", transform);
+        item.asset.draw(shader);
+    }
+
     private void drawHeldDrink(ShaderProgram shader) {
         WorldObject drink = interactions.heldDrink();
         if (drink == null) {
@@ -1460,29 +1941,43 @@ public final class SandboxState implements GameState {
                 fps, p.x, p.y, p.z,
                 onIce ? "ICE" : onGround ? "on ground" : "in air",
                 engine.modManager().addons().stream().filter(engine.modManager()::isEnabled).count());
-        shadowedText(r, status, 12, 12, 1.5f, hudText, hudShadow);
-        String hints = "WASD walk  |  Mouse look  |  Space jump  |  Shift/Ctrl sprint  |  E interact  |  Esc menu";
+        if (arena == null) {
+            shadowedText(r, status, 12, 12, 1.5f, hudText, hudShadow);
+        } else if (!fps.isEmpty()) {
+            // An arena has its own top bar; the sandbox's debug line would run into it.
+            shadowedText(r, fps.replace("  |  ", ""), 12, 12, 1.5f, hudText, hudShadow);
+        }
+        String hints = arena != null
+                ? "WASD move  |  Mouse aim  |  Click shoot  |  R reload  |  1-5 switch gun  |  L lobby  |  Esc menu"
+                : "WASD walk  |  Mouse look  |  Space jump  |  Shift/Ctrl sprint  |  E interact  |  Esc menu";
         if (online != null) {
             hints += "  |  T chat (/help)  |  Tab players";
             drawOnlineHud(r, w, h, hudText, hudShadow);
         }
-        if (engine.actions().hasSchemes() && engine.gamepads().anyConnected()) {
+        // Only when a scheme is actually reading a pad: one that is plugged in but has no layout
+        // drives nothing, and saying "ready" about it sends the player looking for the wrong fault.
+        if (engine.actions().hasLiveController()) {
             hints += "  |  controller ready";
+        } else if (engine.actions().hasSchemes() && engine.gamepads().anyConnected()) {
+            hints += "  |  controller not readable";
         }
         shadowedText(r, hints, 12, h - 24, 1.5f, hudText, hudShadow);
 
         if (noticeTimer > 0) {
-            r.textCentered(notice, 1, 45, w, 20, 1.75f, hudShadow);
-            r.textCentered(notice, 0, 44, w, 20, 1.75f, hudText);
+            float noticeY = arena != null ? 62 : 44; // below an arena's score bar
+            r.textCentered(notice, 1, noticeY + 1, w, 20, 1.75f, hudShadow);
+            r.textCentered(notice, 0, noticeY, w, 20, 1.75f, hudText);
         }
 
         String prompt = punchTarget != null ? "Press E to punch " + punchTarget.name
+                : holdTarget != null ? "Press E to pick up " + holdTarget.name
                 : interactions.prompt(interactionTarget);
         if (prompt != null && engine.input().isCursorCaptured()) {
             float boxWidth = r.textWidth(prompt, 2f) + 28;
             r.rect((w - boxWidth) / 2f, h * 0.62f, boxWidth, 34, Theme.BACKGROUND.withAlpha(0.72f));
             r.textCentered(prompt, (w - boxWidth) / 2f, h * 0.62f, boxWidth, 34, 2f, Theme.TEXT);
         }
+        drawCarried(r, w, h, hudText, hudShadow);
         int sips = interactions.totalSips();
         if (sips > 0) {
             r.text("Sips: " + sips + " / " + sipsToPassOut, 12, 36, 1.5f, Theme.TEXT);
@@ -1509,12 +2004,44 @@ public final class SandboxState implements GameState {
             r.rect(w / 2f - 1, h / 2f - 8, 2, 16, Color.rgb(0xFFFFFF).withAlpha(0.8f));
         }
         drawCheatInfo(r, w, h, hudText, hudShadow);
+        if (arenaScreens != null) {
+            arenaScreens.drawHud(r, w, h);
+        }
+        if (backroomsScreens != null) {
+            backroomsScreens.drawHud(r, w, h);
+        }
+        if (backrooms != null && backrooms.showingVideo()) {
+            // The intro covers everything, HUD included: it is a cut to film.
+            backrooms.video().draw(r, w, h);
+            r.textCentered("Any key to skip", 0, h - 40, w, 20, 1.3f,
+                    Color.rgb(0xFFFFFF).withAlpha(0.45f));
+        }
         r.end();
 
+        // The spawn list sits over everything, so the screens behind it stop taking clicks -
+        // otherwise a press lands on whatever button happens to be under the list as well.
+        if (backroomsScreens != null && !paused && !cheatMenu.isOpen() && !spawnMenu.isOpen()) {
+            engine.ui().begin(lastDelta);
+            backroomsScreens.drawMenus(engine.ui(), r, engine.input(), w, h);
+            engine.ui().end();
+        }
+        if (arenaScreens != null && !paused && !cheatMenu.isOpen() && !spawnMenu.isOpen()) {
+            engine.ui().begin(lastDelta);
+            arenaScreens.drawMenus(engine.ui(), r, engine.input(), w, h);
+            engine.ui().end();
+        }
         if (cheatMenu.isOpen()) {
             engine.ui().begin(lastDelta);
             cheatMenu.draw(engine.ui(), r, w, h);
             engine.ui().end();
+        }
+        if (spawnMenu.isOpen() && !paused) {
+            engine.ui().begin(lastDelta);
+            ItemCatalog.Item picked = spawnMenu.draw(engine.ui(), r, catalog, w, h);
+            engine.ui().end();
+            if (picked != null) {
+                spawnItem(picked);
+            }
         }
         if (paused) {
             drawPauseMenu(w, h);
@@ -1527,7 +2054,8 @@ public final class SandboxState implements GameState {
         boolean esp = cheats.on("playerEsp");
         for (RemotePlayer other : online.others()) {
             float distance = other.eye.distance(camera.position());
-            if (!other.isPlaced() || (!esp && distance > NAME_TAG_RANGE)) {
+            if (!other.isPlaced() || (!esp && distance > NAME_TAG_RANGE)
+                    || (arena != null && arena.isHidden(other.id))) {
                 continue;
             }
             projected.set(other.eye.x, other.eye.y + 0.45f * SCALE, other.eye.z, 1f).mul(viewProjection);
@@ -1542,7 +2070,9 @@ public final class SandboxState implements GameState {
             String tagged = other.taggedName();
             float tw = r.textWidth(tagged, 1.5f);
             r.rect(sx - tw / 2f - 5, sy - 4, tw + 10, 20, Color.rgb(0x000000).withAlpha(0.45f));
-            r.text(tagged, sx - tw / 2f, sy, 1.5f, other.rank > net.coffeebrewia.roastengine.net.Protocol.RANK_NORMAL
+            Color teamColor = arena == null ? null : ArenaScreens.teamColor(arena.teamOf(other.id));
+            r.text(tagged, sx - tw / 2f, sy, 1.5f, teamColor != null ? teamColor
+                    : other.rank > net.coffeebrewia.roastengine.net.Protocol.RANK_NORMAL
                     ? Color.rgb(0xF2C46B) : text);
         }
 
@@ -1607,6 +2137,67 @@ public final class SandboxState implements GameState {
     private float screenY(float x, float y, float z, float windowHeight) {
         projected.set(x, y, z, 1f).mul(viewProjection);
         return projected.w < 0.05f ? Float.NaN : (0.5f - projected.y / projected.w * 0.5f) * windowHeight;
+    }
+
+    /**
+     * What the player is carrying, along the bottom of the screen.
+     *
+     * <p>With the PlaceHolder API that is a row of slots with the chosen one lit up; without it
+     * there is no bag to draw, so a single held item is just named.
+     */
+    private void drawCarried(Renderer2D r, float w, float h, Color text, Color shadow) {
+        if (!engine.input().isCursorCaptured()) {
+            return;
+        }
+        WorldObject held = holding.held();
+        if (!holding.hasBag()) {
+            if (held != null) {
+                shadowedText(r, "Holding " + held.name + (holding.dropAllowed() ? "  (Q to put down)" : ""),
+                        12, h - 46, 1.5f, text, shadow);
+            }
+            return;
+        }
+        int slots = holding.inventory().size();
+        float slotSize = 46;
+        float gap = 6;
+        // Slots widen to fit the longest name (up to a point), so "Shotgun" is not "Shotgu".
+        float maxSlotW = Math.min(112, (w - 40 - (slots - 1) * gap) / Math.max(1, slots));
+        float slotW = slotSize;
+        for (int i = 0; i < slots; i++) {
+            WorldObject inSlot = holding.inventory().at(i);
+            if (inSlot != null) {
+                slotW = Math.max(slotW, r.textWidth(inSlot.name, 1.25f) + 12);
+            }
+        }
+        slotW = Math.max(slotSize, Math.min(slotW, maxSlotW));
+        float rowWidth = slots * slotW + (slots - 1) * gap;
+        float x = (w - rowWidth) / 2f;
+        float y = h - slotSize - 40;
+        for (int i = 0; i < slots; i++) {
+            float slotX = x + i * (slotW + gap);
+            boolean chosen = i == holding.inventory().selected();
+            r.rect(slotX, y, slotW, slotSize, Theme.BACKGROUND.withAlpha(chosen ? 0.9f : 0.6f));
+            if (chosen) {
+                // The chosen slot is the hand, so it is the one with the outline.
+                r.rect(slotX, y, slotW, 3, Theme.ACCENT);
+                r.rect(slotX, y + slotSize - 3, slotW, 3, Theme.ACCENT);
+                r.rect(slotX, y, 3, slotSize, Theme.ACCENT);
+                r.rect(slotX + slotW - 3, y, 3, slotSize, Theme.ACCENT);
+            }
+            r.text(String.valueOf(i + 1), slotX + 5, y + 4, 1.25f, text.withAlpha(0.7f));
+            WorldObject inSlot = holding.inventory().at(i);
+            if (inSlot != null) {
+                // Items have no pictures yet, so the name does the work, cut down if it still won't fit.
+                String label = inSlot.name;
+                while (label.length() > 1 && r.textWidth(label, 1.25f) > slotW - 8) {
+                    label = label.substring(0, label.length() - 1);
+                }
+                r.textCentered(label, slotX, y + slotSize / 2f - 4, slotW, 14, 1.25f, text);
+            }
+        }
+        if (held != null && holding.dropAllowed()) {
+            r.textCentered(held.name + "  (Q to put down)", 0, y - 22, w, 18, 1.5f, text);
+        }
     }
 
     private static void shadowedText(Renderer2D r, String text, float x, float y, float scale,
@@ -1678,6 +2269,14 @@ public final class SandboxState implements GameState {
     public void exit() {
         if (online != null) {
             online.close();
+        }
+        if (backrooms != null) {
+            backrooms.dispose();
+            backrooms = null;
+        }
+        if (catalog != null) {
+            catalog.dispose();
+            catalog = null;
         }
         if (post != null) {
             post.dispose();

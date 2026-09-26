@@ -1,6 +1,11 @@
 package net.coffeebrewia.roastengine.server;
 
+import net.coffeebrewia.roastengine.net.ArenaRules;
 import net.coffeebrewia.roastengine.net.Protocol;
+import net.coffeebrewia.roastengine.net.Protocol.ArenaAction;
+import net.coffeebrewia.roastengine.net.Protocol.ArenaEvent;
+import net.coffeebrewia.roastengine.net.Protocol.ArenaSetup;
+import net.coffeebrewia.roastengine.net.Protocol.ArenaState;
 import net.coffeebrewia.roastengine.net.Protocol.Chat;
 import net.coffeebrewia.roastengine.net.Protocol.ChatSend;
 import net.coffeebrewia.roastengine.net.Protocol.ChooseSession;
@@ -15,6 +20,8 @@ import net.coffeebrewia.roastengine.net.Protocol.PlayerJoined;
 import net.coffeebrewia.roastengine.net.Protocol.PlayerLeft;
 import net.coffeebrewia.roastengine.net.Protocol.Pose;
 import net.coffeebrewia.roastengine.net.Protocol.Rejected;
+import net.coffeebrewia.roastengine.net.Protocol.Shoot;
+import net.coffeebrewia.roastengine.net.Protocol.ShotFired;
 import net.coffeebrewia.roastengine.net.Protocol.Snapshot;
 import net.coffeebrewia.roastengine.net.Protocol.Welcome;
 import org.junit.jupiter.api.AfterEach;
@@ -131,6 +138,20 @@ class RoastServerTest {
     }
 
     @Test
+    void takesAnyVersionFromTheFloorUpIncludingOnesNewerThanItself() throws IOException {
+        // The point of the floor: a player on an older or a newer game still gets in, and is only
+        // held back from what their version cannot do.
+        try (TestClient older = new TestClient()) {
+            older.send(new Hello(Protocol.MIN_VERSION, "", "Older"));
+            assertEquals("Older", older.await(Welcome.class, w -> true).name());
+        }
+        try (TestClient newer = new TestClient()) {
+            newer.send(new Hello(Protocol.VERSION + 3, "", "Newer"));
+            assertEquals("Newer", newer.await(Welcome.class, w -> true).name());
+        }
+    }
+
+    @Test
     void duplicateNamesGetANumber() throws IOException {
         try (TestClient first = join("Leon"); TestClient second = join("leon")) {
             assertEquals("Leon", first.await(Welcome.class, w -> true).name());
@@ -139,10 +160,10 @@ class RoastServerTest {
     }
 
     @Test
-    void refusesWrongVersionFullServerAndBadNames() throws IOException {
-        try (TestClient old = new TestClient()) {
-            old.send(new Hello(Protocol.VERSION - 1, "", "Old"));
-            assertTrue(assertInstanceOf(Rejected.class, old.read()).reason().contains("out of date"));
+    void refusesOnlyReallyOldVersionsFullServerAndBadNames() throws IOException {
+        try (TestClient ancient = new TestClient()) {
+            ancient.send(new Hello(Protocol.MIN_VERSION - 1, "", "Ancient"));
+            assertTrue(assertInstanceOf(Rejected.class, ancient.read()).reason().contains("too old"));
         }
         try (TestClient blank = join("!!")) {
             assertTrue(assertInstanceOf(Rejected.class, blank.read()).reason().contains("name"));
@@ -314,5 +335,68 @@ class RoastServerTest {
             }
             ana.await(Chat.class, c -> c.kind() == Chat.SYSTEM && c.text().contains("Slow down"));
         }
+    }
+
+    private static final ArenaSetup ARENA = new ArenaSetup(List.of("Warehouse", "Courtyard"),
+            2, 100, 1f, 120, 2);
+
+    @Test
+    void refereesAnArenaMatchFromLobbyToAKill() throws IOException {
+        try (TestClient ana = join("Ana"); TestClient ben = join("Ben")) {
+            int anaId = ana.await(Welcome.class, w -> true).yourId();
+            int benId = ben.await(Welcome.class, w -> true).yourId();
+            ana.await(SessionUpdate.class, u -> u.state() == SessionUpdate.CHOOSE);
+            ana.send(new ChooseSession(new ModRef(0, "gun-arena", "Gun Arena"), List.of()));
+            ben.await(SessionUpdate.class, u -> u.state() == SessionUpdate.READY);
+
+            // Both load the world and say what it is; only the first setup counts.
+            ana.send(ARENA);
+            ben.send(new ArenaSetup(List.of("Ignored"), 99, 5, 0f, 60, 1));
+            ArenaState lobby = ben.await(ArenaState.class, st -> st.players().size() == 2);
+            assertEquals(List.of(0, 0), lobby.votes(), "two maps to vote on - Ben's setup was ignored");
+            assertEquals(ArenaRules.RED, team(lobby, anaId));
+            assertEquals(ArenaRules.BLUE, team(lobby, benId));
+
+            // Vote, ready up, and the match starts on the map they voted for.
+            ana.send(new ArenaAction(ArenaAction.VOTE, 1));
+            ben.send(new ArenaAction(ArenaAction.VOTE, 1));
+            ana.send(new ArenaAction(ArenaAction.READY, 1));
+            ben.send(new ArenaAction(ArenaAction.READY, 1));
+            ArenaEvent start = ben.await(ArenaEvent.class, e -> e.kind() == ArenaEvent.MATCH_START);
+            assertEquals(1, start.value());
+
+            // A shot is refereed: Ben hears it, takes the damage and dies.
+            ana.send(new Shoot(2, benId, 150, 0f, 1.7f, 0f, 0f, 0f, -1f, 12f));
+            ShotFired shot = ben.await(ShotFired.class, f -> true);
+            assertEquals(anaId, shot.shooter());
+            assertEquals(benId, shot.target());
+            ArenaEvent kill = ben.await(ArenaEvent.class, e -> e.kind() == ArenaEvent.KILL);
+            assertEquals(anaId, kill.a());
+            assertEquals(2, kill.value(), "the kill feed knows which gun");
+            ArenaState after = ben.await(ArenaState.class, st -> st.redScore() == 1);
+            assertEquals(0, after.players().stream().filter(p -> p.id() == benId).findFirst().orElseThrow().health());
+        }
+    }
+
+    @Test
+    void shotsOutsideAMatchAreNotBelieved() throws IOException {
+        try (TestClient ana = join("Ana"); TestClient ben = join("Ben")) {
+            ana.await(Welcome.class, w -> true);
+            int benId = ben.await(Welcome.class, w -> true).yourId();
+            ana.await(SessionUpdate.class, u -> u.state() == SessionUpdate.CHOOSE);
+            ana.send(new ChooseSession(new ModRef(0, "gun-arena", "Gun Arena"), List.of()));
+            ana.await(SessionUpdate.class, u -> u.state() == SessionUpdate.READY);
+            ana.send(ARENA);
+            ana.await(ArenaState.class, st -> st.players().size() == 2);
+
+            // Still in the lobby: the shot is ignored, and Ben keeps all his health.
+            ana.send(new Shoot(0, benId, 100, 0f, 0f, 0f, 0f, 0f, -1f, 5f));
+            ArenaState later = ana.await(ArenaState.class, st -> true);
+            assertEquals(100, later.players().stream().filter(p -> p.id() == benId).findFirst().orElseThrow().health());
+        }
+    }
+
+    private static int team(ArenaState state, int id) {
+        return state.players().stream().filter(p -> p.id() == id).findFirst().orElseThrow().team();
     }
 }

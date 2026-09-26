@@ -1,0 +1,260 @@
+{
+  "name": "gun-arena",
+  "skyColor": [
+    0.42,
+    0.55,
+    0.72
+  ],
+  "music": "",
+  "groundPlatform": false,
+  "spawn": [
+    0.0,
+    1.7,
+    3.0
+  ],
+  "objects": [
+    {
+      "id": "lobby",
+      "name": "Lobby",
+      "asset": "lobby.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "warehouse",
+      "name": "Warehouse",
+      "asset": "warehouse.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "courtyard",
+      "name": "Courtyard",
+      "asset": "courtyard.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "pistol",
+      "name": "Pistol",
+      "asset": "gun_pistol.obj",
+      "position": {
+        "x": -5.5,
+        "y": 0.98,
+        "z": -6.5
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 90.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": false,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "revolver",
+      "name": "Revolver",
+      "asset": "gun_revolver.obj",
+      "position": {
+        "x": -4.1,
+        "y": 0.98,
+        "z": -6.5
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 90.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": false,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "smg",
+      "name": "SMG",
+      "asset": "gun_smg.obj",
+      "position": {
+        "x": -2.7,
+        "y": 0.98,
+        "z": -6.5
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 90.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": false,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "assault-rifle",
+      "name": "Assault Rifle",
+      "asset": "gun_rifle.obj",
+      "position": {
+        "x": -1.3000000000000007,
+        "y": 0.98,
+        "z": -6.5
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 90.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": false,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "shotgun",
+      "name": "Shotgun",
+      "asset": "gun_shotgun.obj",
+      "position": {
+        "x": 0.09999999999999964,
+        "y": 0.98,
+        "z": -6.5
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 90.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": false,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "sniper-rifle",
+      "name": "Sniper Rifle",
+      "asset": "gun_sniper.obj",
+      "position": {
+        "x": 1.5,
+        "y": 0.98,
+        "z": -6.5
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 90.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": false,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "target-1",
+      "name": "Target 1",
+      "asset": "dummy.obj",
+      "position": {
+        "x": 7.0,
+        "y": 0,
+        "z": -2.0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": false,
+      "kills": false,
+      "slippery": false,
+      "script": "",
+      "entity": true
+    },
+    {
+      "id": "target-2",
+      "name": "Target 2",
+      "asset": "dummy.obj",
+      "position": {
+        "x": 7.0,
+        "y": 0,
+        "z": 1.5
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": false,
+      "kills": false,
+      "slippery": false,
+      "script": "",
+      "entity": true
+    },
+    {
+      "id": "target-3",
+      "name": "Target 3",
+      "asset": "dummy.obj",
+      "position": {
+        "x": 7.0,
+        "y": 0,
+        "z": 5.0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": false,
+      "kills": false,
+      "slippery": false,
+      "script": "",
+      "entity": true
+    }
+  ]
+}

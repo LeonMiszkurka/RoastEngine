@@ -1,0 +1,2137 @@
+{
+  "name": "backrooms",
+  "skyColor": [
+    0.02,
+    0.02,
+    0.02
+  ],
+  "music": "",
+  "groundPlatform": false,
+  "spawn": [
+    -400.0,
+    1.7,
+    0.0
+  ],
+  "objects": [
+    {
+      "id": "level0_shell",
+      "name": "Level 0 - The Lobby Shell",
+      "asset": "level0_shell.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level0_walls_0_0",
+      "name": "Level 0 - The Lobby Walls 0,0",
+      "asset": "level0_walls_0_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level0_walls_1_0",
+      "name": "Level 0 - The Lobby Walls 1,0",
+      "asset": "level0_walls_1_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level0_walls_2_0",
+      "name": "Level 0 - The Lobby Walls 2,0",
+      "asset": "level0_walls_2_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level0_walls_0_1",
+      "name": "Level 0 - The Lobby Walls 0,1",
+      "asset": "level0_walls_0_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level0_walls_1_1",
+      "name": "Level 0 - The Lobby Walls 1,1",
+      "asset": "level0_walls_1_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level0_walls_2_1",
+      "name": "Level 0 - The Lobby Walls 2,1",
+      "asset": "level0_walls_2_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level0_walls_0_2",
+      "name": "Level 0 - The Lobby Walls 0,2",
+      "asset": "level0_walls_0_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level0_walls_1_2",
+      "name": "Level 0 - The Lobby Walls 1,2",
+      "asset": "level0_walls_1_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level0_walls_2_2",
+      "name": "Level 0 - The Lobby Walls 2,2",
+      "asset": "level0_walls_2_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "scrawler_entity",
+      "name": "Scrawler",
+      "asset": "scrawler.obj",
+      "position": {
+        "x": -400.0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": false,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level1_shell",
+      "name": "Level 1 - Habitable Zone Shell",
+      "asset": "level1_shell.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level1_walls_0_0",
+      "name": "Level 1 - Habitable Zone Walls 0,0",
+      "asset": "level1_walls_0_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level1_walls_1_0",
+      "name": "Level 1 - Habitable Zone Walls 1,0",
+      "asset": "level1_walls_1_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level1_walls_2_0",
+      "name": "Level 1 - Habitable Zone Walls 2,0",
+      "asset": "level1_walls_2_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level1_walls_0_1",
+      "name": "Level 1 - Habitable Zone Walls 0,1",
+      "asset": "level1_walls_0_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level1_walls_1_1",
+      "name": "Level 1 - Habitable Zone Walls 1,1",
+      "asset": "level1_walls_1_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level1_walls_2_1",
+      "name": "Level 1 - Habitable Zone Walls 2,1",
+      "asset": "level1_walls_2_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level1_walls_0_2",
+      "name": "Level 1 - Habitable Zone Walls 0,2",
+      "asset": "level1_walls_0_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level1_walls_1_2",
+      "name": "Level 1 - Habitable Zone Walls 1,2",
+      "asset": "level1_walls_1_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level1_walls_2_2",
+      "name": "Level 1 - Habitable Zone Walls 2,2",
+      "asset": "level1_walls_2_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "hound_entity",
+      "name": "Hound",
+      "asset": "hound.obj",
+      "position": {
+        "x": 0.0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": false,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level2_shell",
+      "name": "Level 2 - Pipe Dreams Shell",
+      "asset": "level2_shell.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level2_walls_0_0",
+      "name": "Level 2 - Pipe Dreams Walls 0,0",
+      "asset": "level2_walls_0_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level2_walls_1_0",
+      "name": "Level 2 - Pipe Dreams Walls 1,0",
+      "asset": "level2_walls_1_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level2_walls_2_0",
+      "name": "Level 2 - Pipe Dreams Walls 2,0",
+      "asset": "level2_walls_2_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level2_walls_3_0",
+      "name": "Level 2 - Pipe Dreams Walls 3,0",
+      "asset": "level2_walls_3_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level2_walls_0_1",
+      "name": "Level 2 - Pipe Dreams Walls 0,1",
+      "asset": "level2_walls_0_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level2_walls_1_1",
+      "name": "Level 2 - Pipe Dreams Walls 1,1",
+      "asset": "level2_walls_1_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level2_walls_2_1",
+      "name": "Level 2 - Pipe Dreams Walls 2,1",
+      "asset": "level2_walls_2_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level2_walls_3_1",
+      "name": "Level 2 - Pipe Dreams Walls 3,1",
+      "asset": "level2_walls_3_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level2_walls_0_2",
+      "name": "Level 2 - Pipe Dreams Walls 0,2",
+      "asset": "level2_walls_0_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level2_walls_1_2",
+      "name": "Level 2 - Pipe Dreams Walls 1,2",
+      "asset": "level2_walls_1_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level2_walls_2_2",
+      "name": "Level 2 - Pipe Dreams Walls 2,2",
+      "asset": "level2_walls_2_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level2_walls_3_2",
+      "name": "Level 2 - Pipe Dreams Walls 3,2",
+      "asset": "level2_walls_3_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level2_walls_0_3",
+      "name": "Level 2 - Pipe Dreams Walls 0,3",
+      "asset": "level2_walls_0_3.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level2_walls_1_3",
+      "name": "Level 2 - Pipe Dreams Walls 1,3",
+      "asset": "level2_walls_1_3.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level2_walls_2_3",
+      "name": "Level 2 - Pipe Dreams Walls 2,3",
+      "asset": "level2_walls_2_3.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level2_walls_3_3",
+      "name": "Level 2 - Pipe Dreams Walls 3,3",
+      "asset": "level2_walls_3_3.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "smiler_entity",
+      "name": "Smiler",
+      "asset": "smiler.obj",
+      "position": {
+        "x": 400.0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": false,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level3_shell",
+      "name": "Level 3 - Electrical Station Shell",
+      "asset": "level3_shell.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level3_walls_0_0",
+      "name": "Level 3 - Electrical Station Walls 0,0",
+      "asset": "level3_walls_0_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level3_walls_1_0",
+      "name": "Level 3 - Electrical Station Walls 1,0",
+      "asset": "level3_walls_1_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level3_walls_2_0",
+      "name": "Level 3 - Electrical Station Walls 2,0",
+      "asset": "level3_walls_2_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level3_walls_3_0",
+      "name": "Level 3 - Electrical Station Walls 3,0",
+      "asset": "level3_walls_3_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level3_walls_0_1",
+      "name": "Level 3 - Electrical Station Walls 0,1",
+      "asset": "level3_walls_0_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level3_walls_1_1",
+      "name": "Level 3 - Electrical Station Walls 1,1",
+      "asset": "level3_walls_1_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level3_walls_2_1",
+      "name": "Level 3 - Electrical Station Walls 2,1",
+      "asset": "level3_walls_2_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level3_walls_3_1",
+      "name": "Level 3 - Electrical Station Walls 3,1",
+      "asset": "level3_walls_3_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level3_walls_0_2",
+      "name": "Level 3 - Electrical Station Walls 0,2",
+      "asset": "level3_walls_0_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level3_walls_1_2",
+      "name": "Level 3 - Electrical Station Walls 1,2",
+      "asset": "level3_walls_1_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level3_walls_2_2",
+      "name": "Level 3 - Electrical Station Walls 2,2",
+      "asset": "level3_walls_2_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level3_walls_3_2",
+      "name": "Level 3 - Electrical Station Walls 3,2",
+      "asset": "level3_walls_3_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level3_walls_0_3",
+      "name": "Level 3 - Electrical Station Walls 0,3",
+      "asset": "level3_walls_0_3.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level3_walls_1_3",
+      "name": "Level 3 - Electrical Station Walls 1,3",
+      "asset": "level3_walls_1_3.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level3_walls_2_3",
+      "name": "Level 3 - Electrical Station Walls 2,3",
+      "asset": "level3_walls_2_3.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level3_walls_3_3",
+      "name": "Level 3 - Electrical Station Walls 3,3",
+      "asset": "level3_walls_3_3.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level4_shell",
+      "name": "Level 4 - Abandoned Office Shell",
+      "asset": "level4_shell.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level4_walls_0_0",
+      "name": "Level 4 - Abandoned Office Walls 0,0",
+      "asset": "level4_walls_0_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level4_walls_1_0",
+      "name": "Level 4 - Abandoned Office Walls 1,0",
+      "asset": "level4_walls_1_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level4_walls_2_0",
+      "name": "Level 4 - Abandoned Office Walls 2,0",
+      "asset": "level4_walls_2_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level4_walls_0_1",
+      "name": "Level 4 - Abandoned Office Walls 0,1",
+      "asset": "level4_walls_0_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level4_walls_1_1",
+      "name": "Level 4 - Abandoned Office Walls 1,1",
+      "asset": "level4_walls_1_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level4_walls_2_1",
+      "name": "Level 4 - Abandoned Office Walls 2,1",
+      "asset": "level4_walls_2_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level4_walls_0_2",
+      "name": "Level 4 - Abandoned Office Walls 0,2",
+      "asset": "level4_walls_0_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level4_walls_1_2",
+      "name": "Level 4 - Abandoned Office Walls 1,2",
+      "asset": "level4_walls_1_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level4_walls_2_2",
+      "name": "Level 4 - Abandoned Office Walls 2,2",
+      "asset": "level4_walls_2_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "faceling_entity",
+      "name": "Faceling",
+      "asset": "faceling.obj",
+      "position": {
+        "x": 1200.0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": false,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level5_shell",
+      "name": "Level 5 - Terror Hotel Shell",
+      "asset": "level5_shell.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level5_walls_0_0",
+      "name": "Level 5 - Terror Hotel Walls 0,0",
+      "asset": "level5_walls_0_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level5_walls_1_0",
+      "name": "Level 5 - Terror Hotel Walls 1,0",
+      "asset": "level5_walls_1_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level5_walls_2_0",
+      "name": "Level 5 - Terror Hotel Walls 2,0",
+      "asset": "level5_walls_2_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level5_walls_0_1",
+      "name": "Level 5 - Terror Hotel Walls 0,1",
+      "asset": "level5_walls_0_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level5_walls_1_1",
+      "name": "Level 5 - Terror Hotel Walls 1,1",
+      "asset": "level5_walls_1_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level5_walls_2_1",
+      "name": "Level 5 - Terror Hotel Walls 2,1",
+      "asset": "level5_walls_2_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level5_walls_0_2",
+      "name": "Level 5 - Terror Hotel Walls 0,2",
+      "asset": "level5_walls_0_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level5_walls_1_2",
+      "name": "Level 5 - Terror Hotel Walls 1,2",
+      "asset": "level5_walls_1_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level5_walls_2_2",
+      "name": "Level 5 - Terror Hotel Walls 2,2",
+      "asset": "level5_walls_2_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level6_shell",
+      "name": "Level 6 - Lights Out Shell",
+      "asset": "level6_shell.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level6_walls_0_0",
+      "name": "Level 6 - Lights Out Walls 0,0",
+      "asset": "level6_walls_0_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level6_walls_1_0",
+      "name": "Level 6 - Lights Out Walls 1,0",
+      "asset": "level6_walls_1_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level6_walls_2_0",
+      "name": "Level 6 - Lights Out Walls 2,0",
+      "asset": "level6_walls_2_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level6_walls_3_0",
+      "name": "Level 6 - Lights Out Walls 3,0",
+      "asset": "level6_walls_3_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level6_walls_0_1",
+      "name": "Level 6 - Lights Out Walls 0,1",
+      "asset": "level6_walls_0_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level6_walls_1_1",
+      "name": "Level 6 - Lights Out Walls 1,1",
+      "asset": "level6_walls_1_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level6_walls_2_1",
+      "name": "Level 6 - Lights Out Walls 2,1",
+      "asset": "level6_walls_2_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level6_walls_3_1",
+      "name": "Level 6 - Lights Out Walls 3,1",
+      "asset": "level6_walls_3_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level6_walls_0_2",
+      "name": "Level 6 - Lights Out Walls 0,2",
+      "asset": "level6_walls_0_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level6_walls_1_2",
+      "name": "Level 6 - Lights Out Walls 1,2",
+      "asset": "level6_walls_1_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level6_walls_2_2",
+      "name": "Level 6 - Lights Out Walls 2,2",
+      "asset": "level6_walls_2_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level6_walls_3_2",
+      "name": "Level 6 - Lights Out Walls 3,2",
+      "asset": "level6_walls_3_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level6_walls_0_3",
+      "name": "Level 6 - Lights Out Walls 0,3",
+      "asset": "level6_walls_0_3.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level6_walls_1_3",
+      "name": "Level 6 - Lights Out Walls 1,3",
+      "asset": "level6_walls_1_3.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level6_walls_2_3",
+      "name": "Level 6 - Lights Out Walls 2,3",
+      "asset": "level6_walls_2_3.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level6_walls_3_3",
+      "name": "Level 6 - Lights Out Walls 3,3",
+      "asset": "level6_walls_3_3.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level37_shell",
+      "name": "Level 37 - The Poolrooms Shell",
+      "asset": "level37_shell.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level37_water",
+      "name": "Level 37 - The Poolrooms Water",
+      "asset": "level37_water.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": false,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level37_walls_0_0",
+      "name": "Level 37 - The Poolrooms Walls 0,0",
+      "asset": "level37_walls_0_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level37_walls_1_0",
+      "name": "Level 37 - The Poolrooms Walls 1,0",
+      "asset": "level37_walls_1_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level37_walls_2_0",
+      "name": "Level 37 - The Poolrooms Walls 2,0",
+      "asset": "level37_walls_2_0.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level37_walls_0_1",
+      "name": "Level 37 - The Poolrooms Walls 0,1",
+      "asset": "level37_walls_0_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level37_walls_1_1",
+      "name": "Level 37 - The Poolrooms Walls 1,1",
+      "asset": "level37_walls_1_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level37_walls_2_1",
+      "name": "Level 37 - The Poolrooms Walls 2,1",
+      "asset": "level37_walls_2_1.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level37_walls_0_2",
+      "name": "Level 37 - The Poolrooms Walls 0,2",
+      "asset": "level37_walls_0_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level37_walls_1_2",
+      "name": "Level 37 - The Poolrooms Walls 1,2",
+      "asset": "level37_walls_1_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    },
+    {
+      "id": "level37_walls_2_2",
+      "name": "Level 37 - The Poolrooms Walls 2,2",
+      "asset": "level37_walls_2_2.obj",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "scale": 1.0,
+      "collision": true,
+      "kills": false,
+      "slippery": false,
+      "script": ""
+    }
+  ]
+}

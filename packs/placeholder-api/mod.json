@@ -1,0 +1,8 @@
+{
+  "name": "PlaceHolder API",
+  "nameId": "placeholder-api",
+  "version": "1.0.0",
+  "type": "api",
+  "engine": "RoastEngine 0.1",
+  "description": "A bag. The engine lets you carry one thing in your hands; this gives you five slots, picked with the number keys, so you can carry a torch, a bottle and three other things at once. Worlds and scripts mark what can be picked up with hold_item(); this decides how much of it you can keep."
+}
